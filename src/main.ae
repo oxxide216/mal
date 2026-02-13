@@ -1,0 +1,20 @@
+(use 'std/log')
+(use 'std/io')
+
+(use 'lexer')
+(use 'parser')
+
+(let args (get-args))
+(if (< (len args) 2)
+  (error 'Input file was not provided')
+  (exit 1))
+
+(let code (read-file args::1))
+(if (unit? code)
+  (error 'Could not read input file')
+  (exit 1))
+
+(let tokens (lex code))
+(println tokens)
+;(let ast (parse tokens))
+;(println ast)

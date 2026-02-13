@@ -1,0 +1,191 @@
+(use 'std/str')
+
+(macro count \->
+  (let prev counter)
+  (set counter (+ counter 1))
+  prev)
+
+(macro count \init ->
+  (set counter (+ init 1))
+  init)
+
+(macro ! \func ...args ->
+  (let value (func args))
+  (if (unit? value)
+    (ret value))
+  value)
+
+(macro ? \value ->
+  (if (unit? value)
+    (ret unit))
+  value)
+
+(let lexer-init \code pos ->
+  {
+    'code': code
+    'tokens': []
+    'pos': pos
+  })
+
+(let lexers-merge \a b ->
+  {
+    'code': b::'code'
+    'tokens': (+ a::'tokens' b::'tokens')
+    'pos': 0
+  })
+
+(let new-token \lexeme type ->
+  {
+    'lexeme': lexeme
+    'type': type
+  })
+
+(let new-grammar \lexer type ->
+  {
+    'lexer': lexer
+    'type': type
+  })
+
+(let lex-next \lexer ->
+  (let char (? lexer::'code'::(do lexer::'pos')))
+  (set lexer::'pos' (+ lexer::'pos' 1))
+  [lexer char])
+
+(let lex-eat \lexer token ->
+  {
+    'code': lexer::'code'
+    'tokens': (+ lexer::'tokens' token)
+    'pos': (+ lexer::'pos' (len token))
+  })
+
+(let lex-while \cond ->
+  \lexer ->
+    (let current (! lex-next lexer))
+    (if (cond current::1)
+      (let next ((lex-while cond) current::0))
+      (if (unit? next)
+        current
+       else
+        [next::0 (+ current::1 next::1)])
+     else
+      unit))
+
+(let lex-then \cond then ->
+  \lexer ->
+    (let current (! lex-next lexer))
+    (if (cond current::1)
+      (let next (then current::0))
+      (if (unit? next)
+        current
+       else
+        [next::0 (+ current::1 next::1)])
+     else
+      unit))
+
+(let lex-if \cond ->
+  \lexer ->
+    (let current (! lex-next lexer))
+    (if (cond current::1)
+      current
+     else
+      unit))
+
+(let lex-lit \lit ->
+  \lexer ->
+    (let current (! lex-next lexer))
+    (if (== current::1 lit::0)
+      (let next ((lex-lit (get-range lit 1 (len lit))) current::0))
+      (if (unit? next)
+        current
+       else
+        [next::0 (+ current::1 next::1)])
+     else
+      unit))
+
+(let counter 0)
+
+(let TT-WHITESPACE (count 0))
+(let TT-NUMBER     (count))
+(let TT-RETVAL     (count))
+(let TT-PROC       (count))
+(let TT-END        (count))
+(let TT-IDENT      (count))
+(let TT-OPAREN     (count))
+(let TT-CPAREN     (count))
+
+(let WHITESPACES [' ' '\t' '\n' '\r'])
+
+(let is-ident-start \char ->
+  (or (== char '_') (is-alpha char)))
+
+(let is-ident-part \char ->
+  (or (== char '_') (is-alpha-number char)))
+
+(let lex-whitespace (lex-if \char -> (contains? WHITESPACES char)))
+
+(let lex-number (lex-while is-number))
+
+(let lex-retval (lex-lit 'retval'))
+(let lex-proc (lex-lit 'proc'))
+(let lex-end (lex-lit 'end'))
+
+(let lex-ident
+  (lex-then
+    is-ident-start
+    (lex-while
+      is-ident-part)))
+
+(let lex-oparen (lex-lit '('))
+(let lex-cparen (lex-lit ')'))
+
+(let lex-grammar [
+  (new-grammar lex-whitespace TT-WHITESPACE)
+  (new-grammar lex-number     TT-NUMBER)
+  (new-grammar lex-retval     TT-RETVAL)
+  (new-grammar lex-proc       TT-PROC)
+  (new-grammar lex-end        TT-END)
+  (new-grammar lex-ident      TT-IDENT)
+  (new-grammar lex-oparen     TT-OPAREN)
+  (new-grammar lex-cparen     TT-CPAREN)
+])
+
+(let lexx \lexer ->
+  (if (>= lexer::'pos' (len lexer::'code'))
+    (ret lexer))
+
+  (let results
+    (map
+      \grammar ->
+        (let pair (grammar::'lexer' lexer))
+        (match pair
+          unit => unit
+          ...  => [
+            pair::0
+            (new-token pair::1 grammar::'type')
+          ]) <> lex-grammar))
+  (let clean (filter not-unit? results))
+  (let ordered
+    (sort
+      \a b ->
+        (< (len a::1::'lexeme')
+           (len b::1::'lexeme')) <> clean))
+
+   (if (== (len ordered) 0)
+    (let pos lexer::'pos')
+    (if (< pos (len lexer::'code'))
+      (error 'Unexpected `' lexer::'code'::pos '`')
+     else
+      (error 'Unexpected EOF'))
+    (exit 1))
+
+  (let result ordered::0)
+
+  (set result::0::'tokens' (after result::0::'tokens' result::1))
+  (lexx result::0))
+
+(let lex \code ->
+  (let lexer (lexer-init code 0))
+  (let tokens (lexx lexer)::'tokens')
+  (filter
+    \token -> (!= token::'type' TT-WHITESPACE) <>
+    tokens))
