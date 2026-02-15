@@ -1,0 +1,10 @@
+(let gen-ir-items \items ->
+  (match (len items)
+    0   => []
+    1   => (gen-ir items::0)
+    ... => (+ (gen-ir items::0) (gen-ir-items (from items 1)))))
+
+(let gen-ir \ast ->
+  (match ast::'tag'
+    'program' => (gen-ir-items ast::'items')
+    ...       => []))

@@ -1,2 +1,188 @@
+(use 'defs')
+(use 'lexer')
+
+(macro !? \expr ->
+  (let value expr)
+  (if (error? value)
+    (ret value))
+  value)
+
+(let parser-init \tokens ->
+  {
+    'tokens': tokens
+    'pos': 0
+  })
+
+(let new-error \parser message is-critical ->
+  {
+    'parser': parser
+    'error': {
+      'message': message
+      'is-critical': is-critical
+    }
+  })
+
+(let new-unexpected-error \parser is-critical ->
+  (let pos parser::'pos')
+  (if (< pos (len parser::'tokens'))
+    (let lexeme parser::'tokens'::pos::'lexeme')
+    (new-error parser
+               (join ['Unexpected `' lexeme '`'] '')
+               is-critical)
+   else
+    (new-error parser 'Unexpected EOF' is-critical)))
+
+(let error? \value ->
+  (not-unit? value::'error'))
+
+(let parse-token \type ignore ->
+  \parser ->
+    (let pos parser::'pos')
+    (if (< pos (len parser::'tokens'))
+      (match parser::'tokens'::pos::'type'
+        type =>
+          (do
+            (set parser::'pos' (+ parser::'pos' 1))
+            {
+              'parser': parser
+              'item': parser::'tokens'::pos
+              'ignore': ignore
+            })
+        ...  => (new-unexpected-error parser true))
+     else
+      (new-unexpected-error parser true)))
+
+(let take-token \type -> (parse-token type false))
+(let skip-token \type -> (parse-token type true))
+
+(let parse-node-inner \parses ->
+  \parser ->
+    (if (== (len parses) 0)
+      (ret {
+        'parser': parser
+        'item': {
+          'items': []
+        }
+      }))
+
+    (let first (!? (parses::0 parser)))
+    (let rec (!? ((parse-node-inner (from parses 1)) first::'parser')))
+    (match first::'ignore'
+      true => {
+        'parser': rec::'parser'
+        'item': {
+          'items': rec::'item'::'items'
+        }
+      }
+      ... => {
+        'parser': rec::'parser'
+        'item': {
+          'items': (before first::'item' rec::'item'::'items')
+        }
+      }))
+
+(let parse-node \tag parses ->
+  \parser ->
+    (if (== (len parses) 0)
+      (ret (new-error parser 'Empty node' true)))
+
+    (let first (parses::0 parser))
+    (if (error? first)
+      (ret (new-error first::'parser' first::'error'::'message' false)))
+
+    (let rec (!? ((parse-node-inner (from parses 1)) first::'parser')))
+    (match first::'ignore'
+      true => {
+        'parser': rec::'parser'
+        'item': {
+          'tag': tag
+          'items': rec::'item'::'items'
+        }
+      }
+      ... => {
+        'parser': rec::'parser'
+        'item': {
+          'tag': tag
+          'items': (before first::'item' rec::'item'::'items')
+        }
+      }))
+
+(let parse-list \parse ->
+  \parser ->
+    (let first (parse parser))
+    (if (error? first)
+      (if first::'error'::'is-critical'
+        (ret first)
+       else
+        (ret {
+          'parser': parser
+          'item': {
+            'items': []
+          }
+        })))
+
+    (let rec (!? (<-> first::'parser')))
+
+    {
+      'parser': rec::'parser'
+      'item': {
+        'items': (before first::'item' rec::'item'::'items')
+      }
+    })
+
+(let parse-select \parses ->
+  \parser ->
+    (if (== (len parses) 0)
+      (ret (new-unexpected-error parser false)))
+
+    (let first (parses::0 parser))
+
+    (if (error? first)
+      (if (not first::'error'::'is-critical')
+        (ret ((parse-select (from parses 1)) parser))))
+
+    first)
+
+(let parse-expr \->
+  (parse-select [
+    (parse-node 'number' [
+      (take-token TT-NUMBER)
+    ])
+  ]))
+
+(let parse-statement \->
+  (parse-select [
+    (parse-node 'return' [
+      (skip-token TT-RETVAL)
+      (parse-expr)
+    ])
+  ]))
+
+(let parse-proc-body \->
+  (parse-list
+    (parse-statement)))
+
+(let parse-proc-def \->
+  (parse-node 'proc-def' [
+    (skip-token TT-PROC)
+    (take-token TT-IDENT)
+    (skip-token TT-OPAREN)
+    (skip-token TT-CPAREN)
+    (parse-proc-body)
+    (skip-token TT-END)
+  ]))
+
+(let parse-program \->
+  (parse-node 'program' [
+    (parse-select [
+      (parse-proc-def)
+    ])
+  ]))
+
 (let parse \tokens ->
-  'ast')
+  (let parser (parser-init tokens))
+  (let result ((parse-program) parser))
+  (if (error? result)
+    (error result::'error'::'message')
+   else
+    result::'item'))

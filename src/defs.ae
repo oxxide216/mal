@@ -1,0 +1,32 @@
+(macro count \->
+  (let prev counter)
+  (set counter (+ counter 1))
+  prev)
+
+(macro count \init ->
+  (set counter (+ init 1))
+  init)
+
+(macro ! \expr ->
+  (let value expr)
+  (if (unit? value)
+    (ret value))
+  value)
+
+(macro ? \expr ->
+  (let value expr)
+  (if (unit? value)
+    (ret unit))
+  value)
+
+(let counter 0)
+
+(let TT-WHITESPACE (count 0))
+(let TT-COMMENT    (count))
+(let TT-NUMBER     (count))
+(let TT-RETVAL     (count))
+(let TT-PROC       (count))
+(let TT-END        (count))
+(let TT-IDENT      (count))
+(let TT-OPAREN     (count))
+(let TT-CPAREN     (count))

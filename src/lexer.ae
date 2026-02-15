@@ -1,24 +1,6 @@
 (use 'std/str')
 
-(macro count \->
-  (let prev counter)
-  (set counter (+ counter 1))
-  prev)
-
-(macro count \init ->
-  (set counter (+ init 1))
-  init)
-
-(macro ! \func ...args ->
-  (let value (func args))
-  (if (unit? value)
-    (ret value))
-  value)
-
-(macro ? \value ->
-  (if (unit? value)
-    (ret unit))
-  value)
+(use 'defs')
 
 (let lexer-init \code pos ->
   {
@@ -60,7 +42,7 @@
 
 (let lex-while \cond ->
   \lexer ->
-    (let current (! lex-next lexer))
+    (let current (! (lex-next lexer)))
     (if (cond current::1)
       (let next ((lex-while cond) current::0))
       (if (unit? next)
@@ -72,7 +54,7 @@
 
 (let lex-then \cond then ->
   \lexer ->
-    (let current (! lex-next lexer))
+    (let current (! (lex-next lexer)))
     (if (cond current::1)
       (let next (then current::0))
       (if (unit? next)
@@ -84,7 +66,7 @@
 
 (let lex-if \cond ->
   \lexer ->
-    (let current (! lex-next lexer))
+    (let current (! (lex-next lexer)))
     (if (cond current::1)
       current
      else
@@ -92,7 +74,7 @@
 
 (let lex-lit \lit ->
   \lexer ->
-    (let current (! lex-next lexer))
+    (let current (! (lex-next lexer)))
     (if (== current::1 lit::0)
       (let next ((lex-lit (get-range lit 1 (len lit))) current::0))
       (if (unit? next)
@@ -101,17 +83,6 @@
         [next::0 (+ current::1 next::1)])
      else
       unit))
-
-(let counter 0)
-
-(let TT-WHITESPACE (count 0))
-(let TT-NUMBER     (count))
-(let TT-RETVAL     (count))
-(let TT-PROC       (count))
-(let TT-END        (count))
-(let TT-IDENT      (count))
-(let TT-OPAREN     (count))
-(let TT-CPAREN     (count))
 
 (let WHITESPACES [' ' '\t' '\n' '\r'])
 
@@ -122,6 +93,12 @@
   (or (== char '_') (is-alpha-number char)))
 
 (let lex-whitespace (lex-if \char -> (contains? WHITESPACES char)))
+
+(let lex-comment
+  (lex-then
+    \char -> (== char '#') <>
+    (lex-while
+      \char -> (!= char '\n'))))
 
 (let lex-number (lex-while is-number))
 
@@ -140,6 +117,7 @@
 
 (let lex-grammar [
   (new-grammar lex-whitespace TT-WHITESPACE)
+  (new-grammar lex-comment    TT-COMMENT)
   (new-grammar lex-number     TT-NUMBER)
   (new-grammar lex-retval     TT-RETVAL)
   (new-grammar lex-proc       TT-PROC)
@@ -187,5 +165,6 @@
   (let lexer (lexer-init code 0))
   (let tokens (lexx lexer)::'tokens')
   (filter
-    \token -> (!= token::'type' TT-WHITESPACE) <>
+    \token -> (and (!= token::'type' TT-WHITESPACE)
+                   (!= token::'type' TT-COMMENT)) <>
     tokens))
