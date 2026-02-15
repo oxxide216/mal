@@ -35,7 +35,7 @@
 (let error? \value ->
   (not-unit? value::'error'))
 
-(let parse-token \type ignore ->
+(let parse-token \type name ->
   \parser ->
     (let pos parser::'pos')
     (if (< pos (len parser::'tokens'))
@@ -43,17 +43,17 @@
         type =>
           (do
             (set parser::'pos' (+ parser::'pos' 1))
+            (let item (with parser::'tokens'::pos 'name' name))
             {
               'parser': parser
-              'item': parser::'tokens'::pos
-              'ignore': ignore
+              'item': item
             })
         ...  => (new-unexpected-error parser true))
      else
       (new-unexpected-error parser true)))
 
-(let take-token \type -> (parse-token type false))
-(let skip-token \type -> (parse-token type true))
+(let name-token \type name -> (parse-token type name))
+(let skip-token \type -> (parse-token type unit))
 
 (let parse-node-inner \parses ->
   \parser ->
@@ -67,14 +67,15 @@
 
     (let first (!? (parses::0 parser)))
     (let rec (!? ((parse-node-inner (from parses 1)) first::'parser')))
-    (match first::'ignore'
-      true => {
+    (if (and (unit? first::'item'::'tag') (unit? first::'item'::'name'))
+      {
         'parser': rec::'parser'
         'item': {
           'items': rec::'item'::'items'
         }
       }
-      ... => {
+     else
+      {
         'parser': rec::'parser'
         'item': {
           'items': (before first::'item' rec::'item'::'items')
@@ -91,15 +92,16 @@
       (ret (new-error first::'parser' first::'error'::'message' false)))
 
     (let rec (!? ((parse-node-inner (from parses 1)) first::'parser')))
-    (match first::'ignore'
-      true => {
+    (if (and (unit? first::'item'::'tag') (unit? first::'item'::'name'))
+      {
         'parser': rec::'parser'
         'item': {
           'tag': tag
           'items': rec::'item'::'items'
         }
       }
-      ... => {
+     else
+      {
         'parser': rec::'parser'
         'item': {
           'tag': tag
@@ -107,7 +109,7 @@
         }
       }))
 
-(let parse-list \parse ->
+(let parse-list \tag parse ->
   \parser ->
     (let first (parse parser))
     (if (error? first)
@@ -117,6 +119,7 @@
         (ret {
           'parser': parser
           'item': {
+            'tag': tag
             'items': []
           }
         })))
@@ -126,6 +129,7 @@
     {
       'parser': rec::'parser'
       'item': {
+        'tag': tag
         'items': (before first::'item' rec::'item'::'items')
       }
     })
@@ -146,7 +150,7 @@
 (let parse-expr \->
   (parse-select [
     (parse-node 'number' [
-      (take-token TT-NUMBER)
+      (name-token TT-NUMBER 'value')
     ])
   ]))
 
@@ -158,17 +162,14 @@
     ])
   ]))
 
-(let parse-proc-body \->
-  (parse-list
-    (parse-statement)))
-
 (let parse-proc-def \->
   (parse-node 'proc-def' [
     (skip-token TT-PROC)
-    (take-token TT-IDENT)
+    (name-token TT-IDENT 'name')
     (skip-token TT-OPAREN)
     (skip-token TT-CPAREN)
-    (parse-proc-body)
+    (parse-list 'body'
+      (parse-statement))
     (skip-token TT-END)
   ]))
 
