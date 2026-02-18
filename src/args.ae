@@ -1,0 +1,83 @@
+(use 'std/str')
+
+(use 'targets')
+
+(let DEBUG-OUTPUT-TOKENS (count 0))
+(let DEBUG-OUTPUT-AST    (count))
+(let DEBUG-OUTPUT-IR     (count))
+(let DEBUG-OUTPUT-ASM    (count))
+
+(let DEBUG-OUTPUT-MAP {
+  'tokens': DEBUG-OUTPUT-TOKENS
+  'ast': DEBUG-OUTPUT-AST
+  'code': DEBUG-OUTPUT-IR
+  'asm': DEBUG-OUTPUT-ASM
+})
+
+(let default-parsed-args {
+  'args': []
+  'output-path': 'out.as'
+  'target': TARGET-LINUX-X86_64-FASM
+  'debug-output': unit
+})
+
+(let print-usage \->
+  (print 'Usage: mal [FLAGS]... [FILE]\n\n'
+         '  -h --help                 show this message.\n'
+         '  -o [FILE]                 output assembly into [FILE].\n')
+  (exit 0))
+
+(let parse-args \args ->
+  (if (== (len args) 0)
+    (ret (with default-parsed-args 'args' args)))
+
+  (match (head args)
+    '-h' => (print-usage)
+    '--help' => (print-usage)
+    '-o' =>
+      (do
+        (if (< (len args) 2)
+          (error '-o flag requires an argument')
+          (exit 1))
+        (with (parse-args (from args 2))
+              'output-path'
+              args::1))
+    '--target' =>
+      (do
+        (if (< (len args) 2)
+          (error '--target flag requires an argument')
+          (exit 1))
+        (let new-target TARGET-NAMES-MAP::(do args::1))
+        (if (unit? new-target)
+          (error 'Unknown target')
+          (info 'Available targets:')
+          (for target in TARGET-NAMES-MAP
+            (info (+ '  ' target::'key')))
+          (exit 1))
+        (with (parse-args (from args 2))
+              'target'
+              new-target))
+    '--debug' =>
+      (do
+        (if (< (len args) 2)
+          (error '--debug flag requires an argument')
+          (exit 1))
+        (let new-mode DEBUG-OUTPUT-MAP::(do args::1))
+        (if (unit? new-mode)
+          (error 'Unknown debug output mode')
+          (info 'Available debug output modes:')
+          (for mode in DEBUG-OUTPUT-MAP
+            (info (+ '  ' mode::'key')))
+          (exit 1))
+        (with (parse-args (from args 2))
+              'debug-output'
+              new-mode))
+    ... =>
+      (do
+        (if (begins-with (head args) '-')
+          (error 'Unknown flag: ' (head args))
+          (exit 1))
+        (let parsed-args (parse-args (from args 1)))
+        (with parsed-args
+              'args'
+              (before (head args) parsed-args::'args')))))

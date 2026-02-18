@@ -1,3 +1,7 @@
 proc main()
   retval 0
 end
+
+proc one()
+  retval 1
+end

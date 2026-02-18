@@ -1,0 +1,42 @@
+(let LINUX-x86_64-FASM-ASM-BEGIN
+  (join [
+    'format ELF64 executable\n'
+    'segment readable executable\n'
+    'entry _start\n'
+    '_start:\n'
+    '  call main\n'
+    '  mov rdi,rax\n'
+    '  mov rax,60\n'
+    '  syscall\n'
+  ] ''))
+
+(let arg-gen-asm-linux-x86_64-fasm \arg ->
+  (match arg::'type'
+    ARG-INT => arg::'value'))
+
+(let return-gen-asm-linux-x86_64-fasm \instr ->
+  (let end (if instr::'last' '' else '  ret\n'))
+  (match instr::'arg'
+    unit => end
+    ...  =>
+      (join [
+        '  mov rax,'
+        (arg-gen-asm-linux-x86_64-fasm instr::'arg')
+        '\n'
+         end
+      ] '')))
+
+(let instr-gen-asm-linux-x86_64-fasm \instr ->
+  (match instr::'type'
+    INSTR-RETURN => (return-gen-asm-linux-x86_64-fasm instr)))
+
+(let proc-gen-asm-linux-x86_64-fasm \proc ->
+  (let asm (map instr-gen-asm-linux-x86_64-fasm proc::'body'))
+  (join
+    (+ [proc::'name' ':\n']
+       (after asm '  ret\n'))
+    ''))
+
+(let gen-asm-linux-x86_64-fasm \ir ->
+  (let asm (map proc-gen-asm-linux-x86_64-fasm ir))
+  (+ LINUX-x86_64-FASM-ASM-BEGIN (join asm '')))

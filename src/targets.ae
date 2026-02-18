@@ -1,0 +1,12 @@
+(use 'defs')
+(use 'targets/linux-x86_64-fasm')
+
+(let TARGET-LINUX-X86_64-FASM (count 0))
+
+(let TARGET-NAMES-MAP {
+  'linux-x86_64-fasm': TARGET-LINUX-X86_64-FASM
+})
+
+(let TARGETS {
+  TARGET-LINUX-X86_64-FASM: gen-asm-linux-x86_64-fasm
+})

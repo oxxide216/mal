@@ -1,10 +1,37 @@
-(let gen-ir-items \items ->
+(use 'defs')
+
+(let gen-ir-arg \arg ->
+  (match arg::'tag'
+    'int' => {
+      'type': ARG-INT
+      'value': arg::'items'::0::'lexeme'
+    }))
+
+(let gen-ir-instr \instr last ->
+  (match instr::'tag'
+    'return' => [
+      {
+        'type': INSTR-RETURN
+        'arg': (gen-ir-arg instr::'items'::0)
+        'last': last
+      }
+    ]))
+
+(let gen-ir-global-instr \instr last ->
+  (match instr::'tag'
+    'proc-def' => [
+      {
+        'type': 'proc'
+        'name': instr::'items'::0::'lexeme'
+        'body': (gen-ir-items instr::'items'::1::'items' gen-ir-instr)
+      }
+    ]))
+
+(let gen-ir-items \items gen-func ->
   (match (len items)
     0   => []
-    1   => (gen-ir items::0)
-    ... => (+ (gen-ir items::0) (gen-ir-items (from items 1)))))
+    1   => (gen-func items::0 true)
+    ... => (+ (gen-func items::0 false) (gen-ir-items (from items 1) gen-func))))
 
-(let gen-ir \ast ->
-  (match ast::'tag'
-    'program' => (gen-ir-items ast::'items')
-    ...       => []))
+(let gen-ir \program ->
+  (gen-ir-items program::'items'::0::'items' gen-ir-global-instr))

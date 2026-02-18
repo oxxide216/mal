@@ -149,8 +149,8 @@
 
 (let parse-expr \->
   (parse-select [
-    (parse-node 'number' [
-      (name-token TT-NUMBER 'value')
+    (parse-node 'int' [
+      (name-token TT-INT 'value')
     ])
   ]))
 
@@ -175,9 +175,10 @@
 
 (let parse-program \->
   (parse-node 'program' [
-    (parse-select [
-      (parse-proc-def)
-    ])
+    (parse-list 'items'
+      (parse-select [
+        (parse-proc-def)
+      ]))
   ]))
 
 (let parse \tokens ->

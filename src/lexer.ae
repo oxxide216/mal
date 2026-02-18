@@ -100,7 +100,7 @@
     (lex-while
       \char -> (!= char '\n'))))
 
-(let lex-number (lex-while is-number))
+(let lex-int (lex-while is-number))
 
 (let lex-retval (lex-lit 'retval'))
 (let lex-proc (lex-lit 'proc'))
@@ -118,7 +118,7 @@
 (let lex-grammar [
   (new-grammar lex-whitespace TT-WHITESPACE)
   (new-grammar lex-comment    TT-COMMENT)
-  (new-grammar lex-number     TT-NUMBER)
+  (new-grammar lex-int        TT-INT)
   (new-grammar lex-retval     TT-RETVAL)
   (new-grammar lex-proc       TT-PROC)
   (new-grammar lex-end        TT-END)

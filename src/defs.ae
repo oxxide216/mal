@@ -23,10 +23,14 @@
 
 (let TT-WHITESPACE (count 0))
 (let TT-COMMENT    (count))
-(let TT-NUMBER     (count))
+(let TT-INT        (count))
 (let TT-RETVAL     (count))
 (let TT-PROC       (count))
 (let TT-END        (count))
 (let TT-IDENT      (count))
 (let TT-OPAREN     (count))
 (let TT-CPAREN     (count))
+
+(let INSTR-RETURN (count 0))
+
+(let ARG-INT (count 0))
