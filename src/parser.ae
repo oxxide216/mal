@@ -152,12 +152,22 @@
     (parse-node 'int' [
       (name-token TT-INT 'value')
     ])
+    (parse-node 'var' [
+      (name-token TT-IDENT 'name')
+    ])
   ]))
 
 (let parse-statement \->
   (parse-select [
     (parse-node 'return' [
       (skip-token TT-RETVAL)
+      (parse-expr)
+    ])
+    (parse-node 'assign' [
+      (parse-node 'var' [
+        (name-token TT-IDENT 'name')
+      ])
+      (skip-token TT-ASSIGN)
       (parse-expr)
     ])
   ]))

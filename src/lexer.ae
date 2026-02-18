@@ -114,6 +114,7 @@
 
 (let lex-oparen (lex-lit '('))
 (let lex-cparen (lex-lit ')'))
+(let lex-assign (lex-lit '='))
 
 (let lex-grammar [
   (new-grammar lex-whitespace TT-WHITESPACE)
@@ -125,6 +126,7 @@
   (new-grammar lex-ident      TT-IDENT)
   (new-grammar lex-oparen     TT-OPAREN)
   (new-grammar lex-cparen     TT-CPAREN)
+  (new-grammar lex-assign     TT-ASSIGN)
 ])
 
 (let lexx \lexer ->

@@ -5,6 +5,10 @@
     'int' => {
       'type': ARG-INT
       'value': arg::'items'::0::'lexeme'
+    }
+    'var' => {
+      'type': ARG-VAR
+      'value': arg::'items'::0::'lexeme'
     }))
 
 (let gen-ir-instr \instr last ->
@@ -12,7 +16,19 @@
     'return' => [
       {
         'type': INSTR-RETURN
-        'arg': (gen-ir-arg instr::'items'::0)
+        'args': [
+          (gen-ir-arg instr::'items'::0)
+        ]
+        'last': last
+      }
+    ]
+    'assign' => [
+      {
+        'type': INSTR-ASSIGN
+        'args': [
+          (gen-ir-arg instr::'items'::0)
+          (gen-ir-arg instr::'items'::1)
+        ]
         'last': last
       }
     ]))

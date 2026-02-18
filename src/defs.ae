@@ -30,7 +30,10 @@
 (let TT-IDENT      (count))
 (let TT-OPAREN     (count))
 (let TT-CPAREN     (count))
+(let TT-ASSIGN     (count))
 
 (let INSTR-RETURN (count 0))
+(let INSTR-ASSIGN (count))
 
 (let ARG-INT (count 0))
+(let ARG-VAR (count))

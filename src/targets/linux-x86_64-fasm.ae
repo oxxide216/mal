@@ -10,33 +10,50 @@
     '  syscall\n'
   ] ''))
 
-(let arg-gen-asm-linux-x86_64-fasm \arg ->
+(let arg-gen-asm-linux-x86_64-fasm \arg meta ->
   (match arg::'type'
-    ARG-INT => arg::'value'))
+    ARG-INT => arg::'value'
+    ARG-VAR => meta::(do arg::'value')::'loc'))
 
-(let return-gen-asm-linux-x86_64-fasm \instr ->
+(let return-gen-asm-linux-x86_64-fasm \instr meta ->
   (let end (if instr::'last' '' else '  ret\n'))
-  (match instr::'arg'
+  (match instr::'args'::0
     unit => end
     ...  =>
-      (join [
-        '  mov rax,'
-        (arg-gen-asm-linux-x86_64-fasm instr::'arg')
-        '\n'
-         end
-      ] '')))
+      (do
+        (let loc (arg-gen-asm-linux-x86_64-fasm instr::'args'::0 meta))
+        (if (== loc 'rax')
+          end
+         else
+          (join ['  mov rax,' loc '\n' end] '')))))
 
-(let instr-gen-asm-linux-x86_64-fasm \instr ->
+(let assign-gen-asm-linux-x86_64-fasm \instr meta ->
+  (join [
+    '  mov '
+    (arg-gen-asm-linux-x86_64-fasm instr::'args'::0 meta)
+    ','
+    (arg-gen-asm-linux-x86_64-fasm instr::'args'::1 meta)
+    '\n'
+  ] ''))
+
+(let instr-gen-asm-linux-x86_64-fasm \instr meta ->
   (match instr::'type'
-    INSTR-RETURN => (return-gen-asm-linux-x86_64-fasm instr)))
+    INSTR-RETURN => (return-gen-asm-linux-x86_64-fasm instr meta)
+    INSTR-ASSIGN => (assign-gen-asm-linux-x86_64-fasm instr meta)))
 
-(let proc-gen-asm-linux-x86_64-fasm \proc ->
-  (let asm (map instr-gen-asm-linux-x86_64-fasm proc::'body'))
+(let proc-gen-asm-linux-x86_64-fasm \proc meta ->
+  (let asm
+    (map
+      \instr -> (instr-gen-asm-linux-x86_64-fasm instr meta) <>
+      proc::'body'))
   (join
     (+ [proc::'name' ':\n']
        (after asm '  ret\n'))
     ''))
 
-(let gen-asm-linux-x86_64-fasm \ir ->
-  (let asm (map proc-gen-asm-linux-x86_64-fasm ir))
+(let gen-asm-linux-x86_64-fasm \ir meta ->
+  (let asm
+    (map
+      \proc -> (proc-gen-asm-linux-x86_64-fasm proc meta) <>
+      ir))
   (+ LINUX-x86_64-FASM-ASM-BEGIN (join asm '')))

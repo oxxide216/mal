@@ -5,3 +5,8 @@ end
 proc one()
   retval 1
 end
+
+proc var()
+  t = 2
+  retval t
+end
