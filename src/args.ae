@@ -18,7 +18,7 @@
 
 (let default-parsed-args {
   'args': []
-  'output-path': 'out.as'
+  'output-path': 'out.s'
   'target': TARGET-LINUX-X86_64-FASM
   'debug-output': unit
 })
