@@ -25,8 +25,8 @@
     'assign' => [
       {
         'type': INSTR-ASSIGN
+        'dest': instr::'items'::0::'items'::0::'lexeme'
         'args': [
-          (gen-ir-arg instr::'items'::0)
           (gen-ir-arg instr::'items'::1)
         ]
         'last': last

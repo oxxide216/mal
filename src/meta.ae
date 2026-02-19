@@ -1,0 +1,18 @@
+(let gen-meta-arg \meta arg ->
+  (match arg::'type'
+    ARG-INT => meta
+    ARG-VAR =>
+      (do
+        (let name arg::'value')
+        (set meta::name::'uses' (+ meta::name::'uses' 1))
+        meta)))
+
+(let gen-meta-instr \meta instr ->
+  (let args-meta (fold gen-meta-arg meta instr::'args'))
+  (match instr::'type'
+    INSTR-ASSIGN =>
+      (with args-meta instr::'dest' { 'uses': 0 })
+    ...          => args-meta))
+
+(let gen-meta-proc \proc ->
+  (with proc 'meta' (fold gen-meta-instr {} proc::'body')))

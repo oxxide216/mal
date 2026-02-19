@@ -10,6 +10,16 @@
     '  syscall\n'
   ] ''))
 
+(let LINUX-x86_64-FASM-GENERAL-REGS [
+  'rbx' ; callee-saved
+  'r10' ; not callee-saved
+  'r11' ; not callee-saved
+  'r12' ; callee-saved
+  'r13' ; callee-saved
+  'r14' ; callee-saved
+  'r15' ; callee-saved
+])
+
 (let arg-gen-asm-linux-x86_64-fasm \arg meta ->
   (match arg::'type'
     ARG-INT => arg::'value'
@@ -30,9 +40,9 @@
 (let assign-gen-asm-linux-x86_64-fasm \instr meta ->
   (join [
     '  mov '
-    (arg-gen-asm-linux-x86_64-fasm instr::'args'::0 meta)
+    meta::(do instr::'dest')::'loc'
     ','
-    (arg-gen-asm-linux-x86_64-fasm instr::'args'::1 meta)
+    (arg-gen-asm-linux-x86_64-fasm instr::'args'::0 meta)
     '\n'
   ] ''))
 
@@ -41,19 +51,20 @@
     INSTR-RETURN => (return-gen-asm-linux-x86_64-fasm instr meta)
     INSTR-ASSIGN => (assign-gen-asm-linux-x86_64-fasm instr meta)))
 
-(let proc-gen-asm-linux-x86_64-fasm \proc meta ->
+(let proc-gen-asm-linux-x86_64-fasm \proc ->
   (let asm
     (map
-      \instr -> (instr-gen-asm-linux-x86_64-fasm instr meta) <>
+      \instr -> (instr-gen-asm-linux-x86_64-fasm instr proc::'meta') <>
       proc::'body'))
   (join
     (+ [proc::'name' ':\n']
        (after asm '  ret\n'))
     ''))
 
-(let gen-asm-linux-x86_64-fasm \ir meta ->
-  (let asm
-    (map
-      \proc -> (proc-gen-asm-linux-x86_64-fasm proc meta) <>
-      ir))
+(let proc-alloc-regs-linux-x86_64-fasm \proc ->
+  (with proc 'meta' (alloc-regs proc::'meta' LINUX-x86_64-FASM-GENERAL-REGS)))
+
+(let gen-asm-linux-x86_64-fasm \ir ->
+  (let full-ir (map proc-alloc-regs-linux-x86_64-fasm ir))
+  (let asm (map proc-gen-asm-linux-x86_64-fasm full-ir))
   (+ LINUX-x86_64-FASM-ASM-BEGIN (join asm '')))

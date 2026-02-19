@@ -6,12 +6,14 @@
 (let DEBUG-OUTPUT-AST    (count))
 (let DEBUG-OUTPUT-IR     (count))
 (let DEBUG-OUTPUT-ASM    (count))
+(let DEBUG-OUTPUT-META   (count))
 
 (let DEBUG-OUTPUT-MAP {
   'tokens': DEBUG-OUTPUT-TOKENS
   'ast': DEBUG-OUTPUT-AST
   'code': DEBUG-OUTPUT-IR
   'asm': DEBUG-OUTPUT-ASM
+  'meta': DEBUG-OUTPUT-META
 })
 
 (let default-parsed-args {

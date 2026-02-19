@@ -6,6 +6,7 @@
 (use 'lexer')
 (use 'parser')
 (use 'ir')
+(use 'meta')
 (use 'targets')
 
 (let config (parse-args (from (get-args) 1)))
@@ -31,8 +32,12 @@
 (if (== config::'debug-output' DEBUG-OUTPUT-IR)
   (println ir))
 
+(let meta-ir (map gen-meta-proc ir))
+(if (== config::'debug-output' DEBUG-OUTPUT-META)
+  (println meta-ir))
+
 (let gen-asm TARGETS::(do config::'target'))
-(let asm (gen-asm ir { 't': { 'loc': 'rax' } }))
+(let asm (gen-asm meta-ir))
 (if (== config::'debug-output' DEBUG-OUTPUT-ASM)
   (println asm))
 
