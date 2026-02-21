@@ -11,26 +11,25 @@
   {
     'tokens': tokens
     'pos': 0
+    'max-pos': 0
   })
 
-(let new-error \parser message is-critical ->
+(let new-error \parser message ->
   {
     'parser': parser
     'error': {
       'message': message
-      'is-critical': is-critical
     }
   })
 
-(let new-unexpected-error \parser is-critical ->
+(let new-unexpected-error \parser ->
   (let pos parser::'pos')
   (if (< pos (len parser::'tokens'))
     (let lexeme parser::'tokens'::pos::'lexeme')
     (new-error parser
-               (join ['Unexpected `' lexeme '`'] '')
-               is-critical)
+               (join ['Unexpected `' lexeme '`'] ''))
    else
-    (new-error parser 'Unexpected EOF' is-critical)))
+    (new-error parser 'Unexpected EOF')))
 
 (let error? \value ->
   (not-unit? value::'error'))
@@ -43,14 +42,16 @@
         type =>
           (do
             (set parser::'pos' (+ parser::'pos' 1))
+            (if (< parser::'max-pos' parser::'pos')
+              (set parser::'max-pos' parser::'pos'))
             (let item (with parser::'tokens'::pos 'name' name))
             {
               'parser': parser
               'item': item
             })
-        ...  => (new-unexpected-error parser true))
+        ...  => (new-unexpected-error parser))
      else
-      (new-unexpected-error parser true)))
+      (new-unexpected-error parser)))
 
 (let name-token \type name -> (parse-token type name))
 (let skip-token \type -> (parse-token type unit))
@@ -89,7 +90,7 @@
 
     (let first (parses::0 parser))
     (if (error? first)
-      (ret (new-error first::'parser' first::'error'::'message' false)))
+      (ret (new-error first::'parser' first::'error'::'message')))
 
     (let rec (!? ((parse-node-inner (from parses 1)) first::'parser')))
     (if (and (unit? first::'item'::'tag') (unit? first::'item'::'name'))
@@ -113,16 +114,14 @@
   \parser ->
     (let first (parse parser))
     (if (error? first)
-      (if first::'error'::'is-critical'
-        (ret first)
-       else
-        (ret {
-          'parser': parser
-          'item': {
-            'tag': tag
-            'items': []
-          }
-        })))
+      (set parser::'max-pos' first::'parser'::'max-pos')
+      (ret {
+        'parser': parser
+        'item': {
+          'tag': tag
+          'items': []
+        }
+      }))
 
     (let rec (!? (<-> first::'parser')))
 
@@ -137,13 +136,12 @@
 (let parse-select \parses ->
   \parser ->
     (if (== (len parses) 0)
-      (ret (new-unexpected-error parser false)))
+      (ret (new-unexpected-error parser)))
 
     (let first (parses::0 parser))
-
+    (set parser::'max-pos' first::'parser'::'max-pos')
     (if (error? first)
-      (if (not first::'error'::'is-critical')
-        (ret ((parse-select (from parses 1)) parser))))
+      (ret ((parse-select (from parses 1)) parser)))
 
     first)
 
@@ -169,6 +167,13 @@
       ])
       (skip-token TT-ASSIGN)
       (parse-expr)
+    ])
+    (parse-node 'call' [
+      (parse-node 'func' [
+        (name-token TT-IDENT 'name')
+      ])
+      (skip-token TT-OPAREN)
+      (skip-token TT-CPAREN)
     ])
   ]))
 
@@ -196,5 +201,12 @@
   (let result ((parse-program) parser))
   (if (error? result)
     (error result::'error'::'message')
-   else
-    result::'item'))
+    (exit 1))
+
+  (if (< result::'parser'::'max-pos' (len result::'parser'::'tokens'))
+    (let max-pos result::'parser'::'max-pos')
+    (let lexeme result::'parser'::'tokens'::max-pos::'lexeme')
+    (error 'Unexpected `' lexeme '`')
+    (exit 1))
+
+  result::'item')
