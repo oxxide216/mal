@@ -31,7 +31,19 @@
         ]
         'last': last
       }
-    ]))
+    ]
+    'call' => [
+      {
+        'type': INSTR-CALL
+        'func': instr::'items'::0::'items'::0::'lexeme'
+        'args': []
+        'last': last
+      }
+    ]
+    ... =>
+      (do
+        (error 'Unknown AST tag: `' instr::'tag' '`')
+        (exit 1))))
 
 (let gen-ir-global-instr \instr last ->
   (match instr::'tag'

@@ -11,6 +11,9 @@
   TARGET-LINUX-X86_64-FASM: gen-asm-linux-x86_64-fasm
 })
 
+(let get-var-reg \var index meta regs ->
+  regs::index)
+
 (let alloc-regs \meta regs ->
   (let list
     (map
@@ -26,7 +29,8 @@
       (let name var-indexed::0::'name')
       (let index var-indexed::1)
       (if (< index (len regs))
-        (set meta::name::'loc' regs::index)
+        (set meta::name::'loc'
+             (get-var-reg var-indexed::0 index meta regs))
        else
         (set meta::name::'loc' 'bruh'))
       meta <>

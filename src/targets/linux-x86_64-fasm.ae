@@ -46,10 +46,18 @@
     '\n'
   ] ''))
 
+(let call-gen-asm-linux-x86_64-fasm \instr meta ->
+  (join [
+    '  call '
+    instr::'func'
+    '\n'
+  ] ''))
+
 (let instr-gen-asm-linux-x86_64-fasm \instr meta ->
   (match instr::'type'
     INSTR-RETURN => (return-gen-asm-linux-x86_64-fasm instr meta)
-    INSTR-ASSIGN => (assign-gen-asm-linux-x86_64-fasm instr meta)))
+    INSTR-ASSIGN => (assign-gen-asm-linux-x86_64-fasm instr meta)
+    INSTR-CALL   => (call-gen-asm-linux-x86_64-fasm instr meta)))
 
 (let proc-gen-asm-linux-x86_64-fasm \proc ->
   (let asm

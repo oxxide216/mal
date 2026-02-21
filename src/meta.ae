@@ -1,18 +1,24 @@
-(let gen-meta-arg \meta arg ->
+(let gen-meta-arg \meta arg index ->
   (match arg::'type'
     ARG-INT => meta
     ARG-VAR =>
       (do
         (let name arg::'value')
         (set meta::name::'uses' (+ meta::name::'uses' 1))
+        (set meta::name::'end' index)
         meta)))
 
 (let gen-meta-instr \meta instr ->
-  (let args-meta (fold gen-meta-arg meta instr::'args'))
-  (match instr::'type'
+  (let args-meta
+    (fold
+      \meta arg -> (gen-meta-arg meta arg instr::1) <>
+      meta
+      instr::0::'args'))
+  (match instr::0::'type'
     INSTR-ASSIGN =>
-      (with args-meta instr::'dest' { 'uses': 0 })
+      (with args-meta instr::0::'dest' { 'uses': 0 'begin': instr::1 })
     ...          => args-meta))
 
 (let gen-meta-proc \proc ->
-  (with proc 'meta' (fold gen-meta-instr {} proc::'body')))
+  (let body-indexed (zip proc::'body' (gen-range 0 (len proc::'body'))))
+  (with proc 'meta' (fold gen-meta-instr {} body-indexed)))

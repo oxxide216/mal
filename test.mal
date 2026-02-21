@@ -1,4 +1,5 @@
 proc main()
+  one()
   retval 0
 end
 
@@ -7,6 +8,7 @@ proc one()
 end
 
 proc var()
-  t = 2
-  retval t
+  a = 2
+  b = a
+  retval b
 end
