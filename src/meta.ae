@@ -16,7 +16,14 @@
       instr::0::'args'))
   (match instr::0::'type'
     INSTR-ASSIGN =>
-      (with args-meta instr::0::'dest' { 'uses': 0 'begin': instr::1 })
+      (with
+        args-meta
+        instr::0::'dest'
+        {
+          'uses': 0
+          'begin': instr::1
+          'end': instr::1
+        })
     ...          => args-meta))
 
 (let gen-meta-proc \proc ->

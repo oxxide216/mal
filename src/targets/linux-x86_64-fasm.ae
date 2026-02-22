@@ -1,3 +1,5 @@
+(use 'alloc')
+
 (let LINUX-x86_64-FASM-ASM-BEGIN
   (join [
     'format ELF64 executable\n'

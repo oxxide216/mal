@@ -8,7 +8,9 @@ proc one()
 end
 
 proc var()
+  c = 1
   a = 2
   b = a
+  d = c
   retval b
 end
