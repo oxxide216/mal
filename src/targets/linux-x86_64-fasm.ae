@@ -22,7 +22,7 @@
   { 'name': 'r15' 'saved': true }  ; callee-saved
 ])
 
-(let LINUX-x86_64-FASM-PROC-ARG-REGS [
+(let LINUX-x86_64-FASM-PROC-PARAM-REGS [
   'rdi'
   'rsi'
   'rdx'
@@ -57,15 +57,15 @@
     '\n'
   ] ''))
 
-(let proc-args-gen-asm-linux-x86_64-fasm \args meta ->
+(let proc-params-gen-asm-linux-x86_64-fasm \args meta ->
   (map
     \arg-indexed ->
       (let arg arg-indexed::0)
       (let index arg-indexed::1)
       (join [
         '  mov '
-        (if (< index (len LINUX-x86_64-FASM-PROC-ARG-REGS))
-          LINUX-x86_64-FASM-PROC-ARG-REGS::index
+        (if (< index (len LINUX-x86_64-FASM-PROC-PARAM-REGS))
+          LINUX-x86_64-FASM-PROC-PARAM-REGS::index
          else
           'bruh')
         ','
@@ -76,7 +76,7 @@
 
 (let call-gen-asm-linux-x86_64-fasm \instr meta ->
   (join
-    (+ (proc-args-gen-asm-linux-x86_64-fasm instr::'args' meta)
+    (+ (proc-params-gen-asm-linux-x86_64-fasm instr::'args' meta)
        ['  call ' instr::'func' '\n']) ''))
 
 (let instr-gen-asm-linux-x86_64-fasm \instr meta ->
@@ -96,7 +96,13 @@
     ''))
 
 (let proc-alloc-regs-linux-x86_64-fasm \proc ->
-  (with proc 'meta' (alloc-regs proc::'meta' LINUX-x86_64-FASM-GENERAL-REGS)))
+  (with
+    proc
+    'meta'
+    (alloc-regs
+      proc::'meta'
+      LINUX-x86_64-FASM-GENERAL-REGS
+      LINUX-x86_64-FASM-PROC-PARAM-REGS)))
 
 (let gen-asm-linux-x86_64-fasm \ir ->
   (let full-ir (map proc-alloc-regs-linux-x86_64-fasm ir))

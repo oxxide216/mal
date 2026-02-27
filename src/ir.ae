@@ -51,6 +51,14 @@
       {
         'type': 'proc'
         'name': instr::'name'
+        'params':
+          (map
+            \param ->
+              {
+                'name': param::'name'
+                'type': param::'type'
+              } <>
+            instr::'params')
         'body': (gen-ir-items instr::'body' gen-ir-instr)
       }
     ]))
