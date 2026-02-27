@@ -14,8 +14,8 @@
 
 (let LINUX-x86_64-FASM-GENERAL-REGS [
   { 'name': 'rbx' 'saved': true }  ; callee-saved
-  { 'name': 'r10' 'saved': false } ; not callee-saved
-  { 'name': 'r11' 'saved': false } ; not callee-saved
+  ;{ 'name': 'r10' 'saved': false } ; not callee-saved
+  ;{ 'name': 'r11' 'saved': false } ; not callee-saved
   { 'name': 'r12' 'saved': true }  ; callee-saved
   { 'name': 'r13' 'saved': true }  ; callee-saved
   { 'name': 'r14' 'saved': true }  ; callee-saved
@@ -85,14 +85,58 @@
     INSTR-ASSIGN => (assign-gen-asm-linux-x86_64-fasm instr meta)
     INSTR-CALL   => (call-gen-asm-linux-x86_64-fasm instr meta)))
 
+(let proc-segment-var-gen-asm-linux-x86_64-fasm \loc is-param is-end ->
+  (match is-param
+    true  => ''
+    false => (join [(if is-end '  pop ' else '  push ') loc '\n'] '')))
+
+(let reverse \list ->
+  (sort \item -> true <> list))
+
 (let proc-gen-asm-linux-x86_64-fasm \proc ->
+  (let vars-list
+    (map
+      \entry ->
+        {
+          'loc': entry::'value'::'loc'
+          'is-param': (not-unit? entry::'value'::'param-index')
+        } <>
+      proc::'meta'))
+
+  (let unique-var-locs
+    (fold
+      \locs entry ->
+        (with locs entry::'loc' entry::'is-param') <>
+      {}
+      vars-list))
+
+  (let begin-asm
+    (map
+      \entry ->
+        (proc-segment-var-gen-asm-linux-x86_64-fasm
+          entry::'key'
+          entry::'value'
+          false) <>
+      unique-var-locs))
+
   (let body-asm
     (map
       \instr -> (instr-gen-asm-linux-x86_64-fasm instr proc::'meta') <>
       proc::'body'))
+
+  (let end-asm
+    (map
+      \entry ->
+        (proc-segment-var-gen-asm-linux-x86_64-fasm
+          entry::'key'
+          entry::'value'
+          true) <>
+      unique-var-locs))
+  (let end-asm-reversed (reverse end-asm))
+
   (join
     (+ [proc::'name' ':\n']
-       (after body-asm ' ret\n'))
+       (after (+ begin-asm (+ body-asm end-asm-reversed)) ' ret\n'))
     ''))
 
 (let proc-alloc-regs-linux-x86_64-fasm \proc ->
