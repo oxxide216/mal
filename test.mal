@@ -1,5 +1,6 @@
 proc main()
   one()
+  args(2, 2)
   retval 0
 end
 
@@ -13,4 +14,8 @@ proc var()
   b = a
   d = c
   retval b
+end
+
+proc args(a: s32, b: s32)
+  retval a
 end

@@ -11,26 +11,30 @@
 (let get-var-loc \lifetime meta regs reg-lifetimes ->
   (let reg
     (for reg in regs
-      (if (unit? reg-lifetimes::reg)
-        (ret reg)
+      (let name reg::'name')
+      (if (unit? reg-lifetimes::name)
+        (ret name)
        else
-        (if (not (lifetimes-collide? reg-lifetimes::reg lifetime))
-          (ret reg)))))
+        (if (not (lifetimes-collide? reg-lifetimes::name lifetime))
+          (ret name)))))
 
   (match reg
-    unit => ['bruh' false]
-    ...  => [reg true]))
+    unit => { 'name': 'bruh' 'in-reg': false }
+    ...  => { 'name': reg    'in-reg': true }))
 
 (let alloc-regs \meta regs ->
   (let list
     (map
       \entry -> (with entry::'value' 'name' entry::'key') <>
       meta))
+
   (let sorted
     (sort
       \a b -> (> a::'uses' b::'uses') <>
       list))
+
   (let indexed (zip sorted (gen-range 0 (len sorted))))
+
   (fold
     \meta var-indexed ->
       (let name var-indexed::0::'name')
@@ -39,12 +43,12 @@
         'end': meta::0::name::'end'
       })
       (let loc (get-var-loc lifetime meta::0 regs meta::1))
-      (set meta::0::name::'loc' loc::0)
-      (if loc::1
-        (if (unit? meta::1::(do loc::0))
-          (set meta::1::(do loc::0) [lifetime])
+      (set meta::0::name::'loc' loc::'name')
+      (if loc::'in-reg'
+        (if (unit? meta::1::(do loc::'name'))
+          (set meta::1::(do loc::'name') [lifetime])
          else
-          (set meta::1::(do loc::0) (after meta::1::(do loc::0) lifetime))))
+          (set meta::1::(do loc::'name') (after meta::1::(do loc::'name') lifetime))))
       meta <>
     [meta {}]
     indexed)::0)

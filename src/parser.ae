@@ -7,6 +7,9 @@
     (ret value))
   value)
 
+(let error? \value ->
+  (not-unit? value::'error'))
+
 (let parser-init \tokens ->
   {
     'tokens': tokens
@@ -22,6 +25,30 @@
     }
   })
 
+(let parse-merge \a b ->
+  (if (not-unit? b::'item'::'tag')
+    (if (dict? a::'item'::'items')
+      (set a::'item'::'items'::(do b::'item'::'tag') b::'item'::'items')
+     else
+      (set b::'item'::'items'::'tag' b::'item'::'tag')
+      (set a::'item'::'items' (before b::'item'::'items' a::'item'::'items')))
+   elif (not-unit? b::'item'::'name')
+    (if (dict? a::'item'::'items')
+      (set a::'item'::'items'::(do b::'item'::'name') b::'item'::'items'::'lexeme')
+     else
+      (set b::'item'::'items'::'name' b::'item'::'name')
+      (set a::'item'::'items' (before b::'item'::'items'::'lexeme' a::'item'::'items'))))
+  a)
+
+(let parse-empty \parser tag is-list ->
+  {
+    'parser': parser
+    'item': {
+      'tag': tag
+      'items': (if is-list [] else {})
+    }
+  })
+
 (let new-unexpected-error \parser ->
   (let pos parser::'pos')
   (if (< pos (len parser::'tokens'))
@@ -30,9 +57,6 @@
                (join ['Unexpected `' lexeme '`'] ''))
    else
     (new-error parser 'Unexpected EOF')))
-
-(let error? \value ->
-  (not-unit? value::'error'))
 
 (let parse-token \type name ->
   \parser ->
@@ -44,10 +68,14 @@
             (set parser::'pos' (+ parser::'pos' 1))
             (if (< parser::'max-pos' parser::'pos')
               (set parser::'max-pos' parser::'pos'))
-            (let item (with parser::'tokens'::pos 'name' name))
             {
               'parser': parser
-              'item': item
+              'item': {
+                'name': name
+                'items': {
+                  'lexeme': parser::'tokens'::pos::'lexeme'
+                }
+              }
             })
         ...  => (new-unexpected-error parser))
      else
@@ -56,32 +84,15 @@
 (let name-token \type name -> (parse-token type name))
 (let skip-token \type -> (parse-token type unit))
 
-(let parse-node-inner \parses ->
+(let parse-node-inner \tag parses ->
   \parser ->
     (if (== (len parses) 0)
-      (ret {
-        'parser': parser
-        'item': {
-          'items': []
-        }
-      }))
+      (ret (parse-empty parser tag false)))
 
     (let first (!? (parses::0 parser)))
-    (let rec (!? ((parse-node-inner (from parses 1)) first::'parser')))
-    (if (and (unit? first::'item'::'tag') (unit? first::'item'::'name'))
-      {
-        'parser': rec::'parser'
-        'item': {
-          'items': rec::'item'::'items'
-        }
-      }
-     else
-      {
-        'parser': rec::'parser'
-        'item': {
-          'items': (before first::'item' rec::'item'::'items')
-        }
-      }))
+    (let rec (!? ((parse-node-inner tag (tail parses)) first::'parser')))
+
+    (parse-merge rec first))
 
 (let parse-node \tag parses ->
   \parser ->
@@ -92,46 +103,60 @@
     (if (error? first)
       (ret (new-error first::'parser' first::'error'::'message')))
 
-    (let rec (!? ((parse-node-inner (from parses 1)) first::'parser')))
-    (if (and (unit? first::'item'::'tag') (unit? first::'item'::'name'))
-      {
-        'parser': rec::'parser'
-        'item': {
-          'tag': tag
-          'items': rec::'item'::'items'
-        }
-      }
-     else
-      {
-        'parser': rec::'parser'
-        'item': {
-          'tag': tag
-          'items': (before first::'item' rec::'item'::'items')
-        }
-      }))
+    (let rec (!? ((parse-node-inner tag (tail parses)) first::'parser')))
+
+    (parse-merge rec first))
 
 (let parse-list \tag parse ->
   \parser ->
     (let first (parse parser))
     (if (error? first)
       (set parser::'max-pos' first::'parser'::'max-pos')
+      (ret (parse-empty parser tag true)))
+
+    (let rec (<-> first::'parser'))
+
+    (parse-merge rec first))
+
+(let parse-list-sep-inner \tag sep parse ->
+  \parser ->
+    (let sep-parsed (sep parser))
+    (if (error? sep-parsed)
+      (set parser::'max-pos' sep-parsed::'parser'::'max-pos')
+      (ret (parse-empty parser tag true)))
+
+    (let first (parse sep-parsed::'parser'))
+    (if (error? first)
+      (set parser::'max-pos' first::'parser'::'max-pos')
+      (ret (parse-empty sep-parsed::'parser' tag true)))
+
+    (let rec (!? ((parse-list-sep-inner tag sep parse) first::'parser')))
+
+    (parse-merge rec first))
+
+(let parse-list-sep \tag sep parse ->
+  \parser ->
+    (let first (parse parser))
+    (if (error? first)
+      (set parser::'max-pos' first::'parser'::'max-pos')
+      (ret (parse-empty parser tag true)))
+
+    (let rec (!? ((parse-list-sep-inner tag sep parse) first::'parser')))
+
+    (parse-merge rec first))
+
+(let parse-opt \parse ->
+  \parser ->
+    (let first (parse parser))
+    (if (error? first)
       (ret {
-        'parser': parser
+        'parser': first::'parser'
         'item': {
-          'tag': tag
-          'items': []
+          'items': {}
         }
       }))
 
-    (let rec (!? (<-> first::'parser')))
-
-    {
-      'parser': rec::'parser'
-      'item': {
-        'tag': tag
-        'items': (before first::'item' rec::'item'::'items')
-      }
-    })
+    first)
 
 (let parse-select \parses ->
   \parser ->
@@ -146,12 +171,14 @@
     first)
 
 (let parse-expr \->
-  (parse-select [
-    (parse-node 'int' [
-      (name-token TT-INT 'value')
-    ])
-    (parse-node 'var' [
-      (name-token TT-IDENT 'name')
+  (parse-node 'expr' [
+    (parse-select [
+      (parse-node 'int' [
+        (name-token TT-INT 'value')
+      ])
+      (parse-node 'var' [
+        (name-token TT-IDENT 'name')
+      ])
     ])
   ]))
 
@@ -162,19 +189,30 @@
       (parse-expr)
     ])
     (parse-node 'assign' [
-      (parse-node 'var' [
-        (name-token TT-IDENT 'name')
-      ])
+      (name-token TT-IDENT 'var-name')
       (skip-token TT-ASSIGN)
       (parse-expr)
     ])
     (parse-node 'call' [
-      (parse-node 'func' [
-        (name-token TT-IDENT 'name')
-      ])
+      (name-token TT-IDENT 'func-name')
       (skip-token TT-OPAREN)
+      (parse-list-sep 'args'
+        (skip-token TT-COMMA)
+        (parse-expr))
       (skip-token TT-CPAREN)
     ])
+  ]))
+
+(let parse-type \->
+  (parse-select [
+    (name-token TT-IDENT 'type')
+  ]))
+
+(let parse-arg \->
+  (parse-node 'arg' [
+    (name-token TT-IDENT 'name')
+    (skip-token TT-COLON)
+    (parse-type)
   ]))
 
 (let parse-proc-def \->
@@ -182,6 +220,9 @@
     (skip-token TT-PROC)
     (name-token TT-IDENT 'name')
     (skip-token TT-OPAREN)
+    (parse-list-sep 'args'
+      (skip-token TT-COMMA)
+      (parse-arg))
     (skip-token TT-CPAREN)
     (parse-list 'body'
       (parse-statement))
@@ -189,12 +230,10 @@
   ]))
 
 (let parse-program \->
-  (parse-node 'program' [
-    (parse-list 'items'
-      (parse-select [
-        (parse-proc-def)
-      ]))
-  ]))
+  (parse-list 'program'
+    (parse-select [
+      (parse-proc-def)
+    ])))
 
 (let parse \tokens ->
   (let parser (parser-init tokens))

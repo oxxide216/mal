@@ -13,13 +13,22 @@
   ] ''))
 
 (let LINUX-x86_64-FASM-GENERAL-REGS [
-  'rbx' ; callee-saved
-  'r10' ; not callee-saved
-  'r11' ; not callee-saved
-  'r12' ; callee-saved
-  'r13' ; callee-saved
-  'r14' ; callee-saved
-  'r15' ; callee-saved
+  { 'name': 'rbx' 'saved': true }  ; callee-saved
+  { 'name': 'r10' 'saved': false } ; not callee-saved
+  { 'name': 'r11' 'saved': false } ; not callee-saved
+  { 'name': 'r12' 'saved': true }  ; callee-saved
+  { 'name': 'r13' 'saved': true }  ; callee-saved
+  { 'name': 'r14' 'saved': true }  ; callee-saved
+  { 'name': 'r15' 'saved': true }  ; callee-saved
+])
+
+(let LINUX-x86_64-FASM-PROC-ARG-REGS [
+  'rdi'
+  'rsi'
+  'rdx'
+  'rcx'
+  'r8'
+  'r9'
 ])
 
 (let arg-gen-asm-linux-x86_64-fasm \arg meta ->
@@ -48,12 +57,27 @@
     '\n'
   ] ''))
 
+(let proc-args-gen-asm-linux-x86_64-fasm \args meta ->
+  (map
+    \arg-indexed ->
+      (let arg arg-indexed::0)
+      (let index arg-indexed::1)
+      (join [
+        '  mov '
+        (if (< index (len LINUX-x86_64-FASM-PROC-ARG-REGS))
+          LINUX-x86_64-FASM-PROC-ARG-REGS::index
+         else
+          'bruh')
+        ','
+        (arg-gen-asm-linux-x86_64-fasm arg meta)
+        '\n'
+      ] '') <>
+    (zip args (gen-range 0 (len args)))))
+
 (let call-gen-asm-linux-x86_64-fasm \instr meta ->
-  (join [
-    '  call '
-    instr::'func'
-    '\n'
-  ] ''))
+  (join
+    (+ (proc-args-gen-asm-linux-x86_64-fasm instr::'args' meta)
+       ['  call ' instr::'func' '\n']) ''))
 
 (let instr-gen-asm-linux-x86_64-fasm \instr meta ->
   (match instr::'type'
@@ -62,13 +86,13 @@
     INSTR-CALL   => (call-gen-asm-linux-x86_64-fasm instr meta)))
 
 (let proc-gen-asm-linux-x86_64-fasm \proc ->
-  (let asm
+  (let body-asm
     (map
       \instr -> (instr-gen-asm-linux-x86_64-fasm instr proc::'meta') <>
       proc::'body'))
   (join
     (+ [proc::'name' ':\n']
-       (after asm '  ret\n'))
+       (after body-asm ' ret\n'))
     ''))
 
 (let proc-alloc-regs-linux-x86_64-fasm \proc ->

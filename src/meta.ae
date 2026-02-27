@@ -4,7 +4,9 @@
     ARG-VAR =>
       (do
         (let name arg::'value')
-        (set meta::name::'uses' (+ meta::name::'uses' 1))
+        (match meta::name
+          unit => (set meta::name { 'uses': 0 })
+          ...  => (set meta::name::'uses' (+ meta::name::'uses' 1)))
         (set meta::name::'end' index)
         meta)))
 

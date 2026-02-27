@@ -31,6 +31,8 @@
 (let TT-OPAREN     (count))
 (let TT-CPAREN     (count))
 (let TT-ASSIGN     (count))
+(let TT-COMMA      (count))
+(let TT-COLON      (count))
 
 (let INSTR-RETURN (count 0))
 (let INSTR-ASSIGN (count))

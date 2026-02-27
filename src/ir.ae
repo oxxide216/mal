@@ -1,14 +1,14 @@
 (use 'defs')
 
 (let gen-ir-arg \arg ->
-  (match arg::'tag'
-    'int' => {
+  (match true
+    (not-unit? arg::'int') => {
       'type': ARG-INT
-      'value': arg::'items'::0::'lexeme'
+      'value': arg::'int'::'value'
     }
-    'var' => {
+    (not-unit? arg::'var') => {
       'type': ARG-VAR
-      'value': arg::'items'::0::'lexeme'
+      'value': arg::'var'::'name'
     }))
 
 (let gen-ir-instr \instr last ->
@@ -17,7 +17,7 @@
       {
         'type': INSTR-RETURN
         'args': [
-          (gen-ir-arg instr::'items'::0)
+          (gen-ir-arg instr::'expr')
         ]
         'last': last
       }
@@ -25,9 +25,9 @@
     'assign' => [
       {
         'type': INSTR-ASSIGN
-        'dest': instr::'items'::0::'items'::0::'lexeme'
+        'dest': instr::'var-name'
         'args': [
-          (gen-ir-arg instr::'items'::1)
+          (gen-ir-arg instr::'expr')
         ]
         'last': last
       }
@@ -35,8 +35,8 @@
     'call' => [
       {
         'type': INSTR-CALL
-        'func': instr::'items'::0::'items'::0::'lexeme'
-        'args': []
+        'func': instr::'func-name'
+        'args': (map gen-ir-arg instr::'args')
         'last': last
       }
     ]
@@ -50,8 +50,8 @@
     'proc-def' => [
       {
         'type': 'proc'
-        'name': instr::'items'::0::'lexeme'
-        'body': (gen-ir-items instr::'items'::1::'items' gen-ir-instr)
+        'name': instr::'name'
+        'body': (gen-ir-items instr::'body' gen-ir-instr)
       }
     ]))
 
@@ -62,4 +62,4 @@
     ... => (+ (gen-func items::0 false) (gen-ir-items (from items 1) gen-func))))
 
 (let gen-ir \program ->
-  (gen-ir-items program::'items'::0::'items' gen-ir-global-instr))
+  (gen-ir-items program::'items' gen-ir-global-instr))
