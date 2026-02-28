@@ -21,6 +21,7 @@
   'output-path': 'out.s'
   'target': TARGET-LINUX-X86_64-FASM
   'debug-output': unit
+  'no-start': false
 })
 
 (let print-usage \->
@@ -74,6 +75,10 @@
         (with (parse-args (from args 2))
               'debug-output'
               new-mode))
+    '--no-start' =>
+      (with (parse-args (from args 2))
+            'no-start'
+            true)
     ... =>
       (do
         (if (begins-with (head args) '-')

@@ -1,6 +1,6 @@
 (use 'alloc')
 
-(let LINUX-x86_64-FASM-ASM-BEGIN
+(let LINUX-x86_64-FASM-ASM-BEGIN-WITH-START
   (join [
     'format ELF64\n'
     'section \'.text\' executable\n'
@@ -10,6 +10,12 @@
     '  mov rdi,rax\n'
     '  mov rax,60\n'
     '  syscall\n'
+  ] ''))
+
+(let LINUX-x86_64-FASM-ASM-BEGIN-WITHOUT-START
+  (join [
+    'format ELF64\n'
+    'section \'.text\' executable\n'
   ] ''))
 
 (let LINUX-x86_64-FASM-GENERAL-REGS [
@@ -135,7 +141,7 @@
   (let end-asm-reversed (reverse end-asm))
 
   (join
-    (+ [proc::'name' ':\n']
+    (+ ['public ' proc::'name' '\n' proc::'name' ':\n']
        (after (+ begin-asm (+ body-asm end-asm-reversed)) ' ret\n'))
     ''))
 
@@ -148,7 +154,12 @@
       LINUX-x86_64-FASM-GENERAL-REGS
       LINUX-x86_64-FASM-PROC-PARAM-REGS)))
 
-(let gen-asm-linux-x86_64-fasm \ir ->
+(let gen-asm-linux-x86_64-fasm \ir gen-start ->
   (let full-ir (map proc-alloc-regs-linux-x86_64-fasm ir))
   (let asm (map proc-gen-asm-linux-x86_64-fasm full-ir))
-  (+ LINUX-x86_64-FASM-ASM-BEGIN (join asm '')))
+  (+
+    (if gen-start
+      LINUX-x86_64-FASM-ASM-BEGIN-WITH-START
+     else
+      LINUX-x86_64-FASM-ASM-BEGIN-WITHOUT-START)
+    (join asm '')))

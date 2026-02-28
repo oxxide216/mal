@@ -37,7 +37,7 @@
   (println meta-ir))
 
 (let gen-asm TARGETS::(do config::'target'))
-(let asm (gen-asm meta-ir))
+(let asm (gen-asm meta-ir (not config::'no-start')))
 (if (== config::'debug-output' DEBUG-OUTPUT-ASM)
   (println asm))
 
