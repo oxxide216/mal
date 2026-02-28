@@ -2,9 +2,9 @@
 
 (let LINUX-x86_64-FASM-ASM-BEGIN
   (join [
-    'format ELF64 executable\n'
-    'segment readable executable\n'
-    'entry _start\n'
+    'format ELF64\n'
+    'section \'.text\' executable\n'
+    'public _start\n'
     '_start:\n'
     '  call main\n'
     '  mov rdi,rax\n'
