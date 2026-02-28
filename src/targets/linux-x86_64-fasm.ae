@@ -63,6 +63,32 @@
     '\n'
   ] ''))
 
+(let call-gen-asm-linux-x86_64-fasm \instr meta ->
+  (join
+    (+ (proc-params-gen-asm-linux-x86_64-fasm instr::'args' meta)
+       ['  call ' instr::'func' '\n'])
+    ''))
+
+(let call-assign-gen-asm-linux-x86_64-fasm \instr meta ->
+  (join
+    (+ (proc-params-gen-asm-linux-x86_64-fasm instr::'args' meta)
+       [
+         '  call '
+         instr::'func'
+         '\n'
+         '  mov '
+         meta::(do instr::'dest')::'loc'
+         ',rax\n'
+       ])
+    ''))
+
+(let instr-gen-asm-linux-x86_64-fasm \instr meta ->
+  (match instr::'type'
+    INSTR-RETURN      => (return-gen-asm-linux-x86_64-fasm instr meta)
+    INSTR-ASSIGN      => (assign-gen-asm-linux-x86_64-fasm instr meta)
+    INSTR-CALL        => (call-gen-asm-linux-x86_64-fasm instr meta)
+    INSTR-CALL-ASSIGN => (call-assign-gen-asm-linux-x86_64-fasm instr meta)))
+
 (let proc-params-gen-asm-linux-x86_64-fasm \args meta ->
   (map
     \arg-indexed ->
@@ -79,17 +105,6 @@
         '\n'
       ] '') <>
     (zip args (gen-range 0 (len args)))))
-
-(let call-gen-asm-linux-x86_64-fasm \instr meta ->
-  (join
-    (+ (proc-params-gen-asm-linux-x86_64-fasm instr::'args' meta)
-       ['  call ' instr::'func' '\n']) ''))
-
-(let instr-gen-asm-linux-x86_64-fasm \instr meta ->
-  (match instr::'type'
-    INSTR-RETURN => (return-gen-asm-linux-x86_64-fasm instr meta)
-    INSTR-ASSIGN => (assign-gen-asm-linux-x86_64-fasm instr meta)
-    INSTR-CALL   => (call-gen-asm-linux-x86_64-fasm instr meta)))
 
 (let proc-segment-var-gen-asm-linux-x86_64-fasm \loc is-param is-end ->
   (match is-param

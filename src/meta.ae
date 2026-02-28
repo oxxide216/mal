@@ -25,6 +25,16 @@
           'end': instr::1
           'param-index': unit
         })
+    INSTR-CALL-ASSIGN =>
+      (with
+        args-meta
+        instr::0::'dest'
+        {
+          'uses': 0
+          'begin': instr::1
+          'end': instr::1
+          'param-index': unit
+        })
     ...          => args-meta))
 
 (let gen-meta-param \meta param ->

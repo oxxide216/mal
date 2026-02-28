@@ -1,7 +1,7 @@
 proc main()
   one()
-  args(2, 2)
-  retval 0
+  result = args(2, 2)
+  retval result
 end
 
 proc one()

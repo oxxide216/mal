@@ -188,6 +188,16 @@
       (skip-token TT-RETVAL)
       (parse-expr)
     ])
+    (parse-node 'call-assign' [
+      (name-token TT-IDENT 'var-name')
+      (skip-token TT-ASSIGN)
+      (name-token TT-IDENT 'func-name')
+      (skip-token TT-OPAREN)
+      (parse-list-sep 'args'
+        (skip-token TT-COMMA)
+        (parse-expr))
+      (skip-token TT-CPAREN)
+    ])
     (parse-node 'assign' [
       (name-token TT-IDENT 'var-name')
       (skip-token TT-ASSIGN)

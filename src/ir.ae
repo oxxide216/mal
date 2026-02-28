@@ -40,6 +40,15 @@
         'last': last
       }
     ]
+    'call-assign' => [
+      {
+        'type': INSTR-CALL-ASSIGN
+        'dest': instr::'var-name'
+        'func': instr::'func-name'
+        'args': (map gen-ir-arg instr::'args')
+        'last': last
+      }
+    ]
     ... =>
       (do
         (error 'Unknown AST tag: `' instr::'tag' '`')

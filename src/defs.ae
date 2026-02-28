@@ -35,9 +35,10 @@
 (let TT-COLON      (count))
 (let TT-EXTERN     (count))
 
-(let INSTR-RETURN (count 0))
-(let INSTR-ASSIGN (count))
-(let INSTR-CALL   (count))
+(let INSTR-RETURN      (count 0))
+(let INSTR-ASSIGN      (count))
+(let INSTR-CALL        (count))
+(let INSTR-CALL-ASSIGN (count))
 
 (let ITEM-PROC-DEF         (count 0))
 (let ITEM-EXTERN-PROC-DECL (count))
