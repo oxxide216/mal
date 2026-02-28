@@ -11,8 +11,7 @@ SECTIONS
     . = 0x400000 + SIZEOF_HEADERS;
 
     .text : {
-        *(.text*)
-        *(.text.*)
+      *(.text*)
     } :text
 
     /DISCARD/ : {
@@ -22,7 +21,6 @@ SECTIONS
         *(.eh_frame_hdr)
         *(.got)
         *(.got.plt)
-        *(.bss)
         *(.rodata*)
         *(.interp)
         *(.dynsym)
