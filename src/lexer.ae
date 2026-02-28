@@ -103,8 +103,9 @@
 (let lex-int (lex-while is-number))
 
 (let lex-retval (lex-lit 'retval'))
-(let lex-proc (lex-lit 'proc'))
-(let lex-end (lex-lit 'end'))
+(let lex-proc   (lex-lit 'proc'))
+(let lex-end    (lex-lit 'end'))
+(let lex-extern (lex-lit 'extern'))
 
 (let lex-ident
   (lex-then
@@ -125,6 +126,7 @@
   (new-grammar lex-retval     TT-RETVAL)
   (new-grammar lex-proc       TT-PROC)
   (new-grammar lex-end        TT-END)
+  (new-grammar lex-extern     TT-EXTERN)
   (new-grammar lex-ident      TT-IDENT)
   (new-grammar lex-oparen     TT-OPAREN)
   (new-grammar lex-cparen     TT-CPAREN)

@@ -32,7 +32,7 @@
 (if (== config::'debug-output' DEBUG-OUTPUT-IR)
   (println ir))
 
-(let meta-ir (map gen-meta-proc ir))
+(let meta-ir (map gen-meta-item ir))
 (if (== config::'debug-output' DEBUG-OUTPUT-META)
   (println meta-ir))
 

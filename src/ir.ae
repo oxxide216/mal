@@ -49,7 +49,7 @@
   (match instr::'tag'
     'proc-def' => [
       {
-        'type': 'proc'
+        'type': ITEM-PROC-DEF
         'name': instr::'name'
         'params':
           (map
@@ -60,6 +60,20 @@
               } <>
             instr::'params')
         'body': (gen-ir-items instr::'body' gen-ir-instr)
+      }
+    ]
+    'extern-proc-decl' => [
+      {
+        'type': ITEM-EXTERN-PROC-DECL
+        'name': instr::'name'
+        'params':
+          (map
+            \param ->
+              {
+                'name': param::'name'
+                'type': param::'type'
+              } <>
+            instr::'params')
       }
     ]))
 

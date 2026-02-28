@@ -229,10 +229,23 @@
     (skip-token TT-END)
   ]))
 
+(let parse-extern-proc-decl \->
+  (parse-node 'extern-proc-decl' [
+    (skip-token TT-EXTERN)
+    (skip-token TT-PROC)
+    (name-token TT-IDENT 'name')
+    (skip-token TT-OPAREN)
+    (parse-list-sep 'params'
+      (skip-token TT-COMMA)
+      (parse-param))
+    (skip-token TT-CPAREN)
+  ]))
+
 (let parse-program \->
   (parse-list 'program'
     (parse-select [
       (parse-proc-def)
+      (parse-extern-proc-decl)
     ])))
 
 (let parse \tokens ->

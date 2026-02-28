@@ -38,8 +38,12 @@
       'param-index': param::1
     }))
 
-(let gen-meta-proc \proc ->
-  (let params-indexed (zip proc::'params' (gen-range 0 (len proc::'params'))))
-  (let body-indexed (zip proc::'body' (gen-range 0 (len proc::'body'))))
-  (let params-meta (fold gen-meta-param {} params-indexed))
-  (with proc 'meta' (fold gen-meta-instr params-meta body-indexed)))
+(let gen-meta-item \item ->
+  (match item::'type'
+    ITEM-PROC-DEF         =>
+      (do
+        (let params-indexed (zip item::'params' (gen-range 0 (len item::'params'))))
+        (let body-indexed (zip item::'body' (gen-range 0 (len item::'body'))))
+        (let params-meta (fold gen-meta-param {} params-indexed))
+        (with item 'meta' (fold gen-meta-instr params-meta body-indexed)))
+    ITEM-EXTERN-PROC-DECL => item))

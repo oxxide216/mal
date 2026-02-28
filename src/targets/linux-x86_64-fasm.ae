@@ -145,18 +145,32 @@
        (after (+ begin-asm (+ body-asm end-asm-reversed)) ' ret\n'))
     ''))
 
-(let proc-alloc-regs-linux-x86_64-fasm \proc ->
-  (with
-    proc
-    'meta'
-    (alloc-regs
-      proc::'meta'
-      LINUX-x86_64-FASM-GENERAL-REGS
-      LINUX-x86_64-FASM-PROC-PARAM-REGS)))
+(let extern-proc-gen-asm-linux-x86_64-fasm \proc ->
+  (join [
+    'extrn \'' proc::'name' '\' as _' proc::'name' '\n'
+    proc::'name' ' = plt _' proc::'name' '\n'
+  ] ''))
+
+(let item-gen-asm-linux-x86_64-fasm \item ->
+  (match item::'type'
+    ITEM-PROC-DEF         => (proc-gen-asm-linux-x86_64-fasm item)
+    ITEM-EXTERN-PROC-DECL => (extern-proc-gen-asm-linux-x86_64-fasm item)))
+
+(let proc-alloc-regs-linux-x86_64-fasm \item ->
+  (match item::'type'
+    ITEM-PROC-DEF =>
+      (with
+        item
+        'meta'
+        (alloc-regs
+          item::'meta'
+          LINUX-x86_64-FASM-GENERAL-REGS
+          LINUX-x86_64-FASM-PROC-PARAM-REGS))
+    ...           => item))
 
 (let gen-asm-linux-x86_64-fasm \ir gen-start ->
   (let full-ir (map proc-alloc-regs-linux-x86_64-fasm ir))
-  (let asm (map proc-gen-asm-linux-x86_64-fasm full-ir))
+  (let asm (map item-gen-asm-linux-x86_64-fasm full-ir))
   (+
     (if gen-start
       LINUX-x86_64-FASM-ASM-BEGIN-WITH-START
