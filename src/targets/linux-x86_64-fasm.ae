@@ -47,13 +47,24 @@
           (join ['  mov ' return-loc ',' loc '\n' end] '')))))
 
 (let assign-gen-asm-linux-x86_64-fasm \instr meta ->
-  (join [
-    '  mov '
-    meta::'vars'::(do instr::'dest')::'loc'
-    ','
-    (arg-gen-asm-linux-x86_64-fasm instr::'args'::0 meta)
-    '\n'
-  ] ''))
+  (let dest-var meta::'vars'::(do instr::'dest'))
+  (match dest-var::'type'::'type'
+    TYPE-PTR =>
+      (join [
+        '  lea '
+        dest-var::'loc'
+        ',['
+        (arg-gen-asm-linux-x86_64-fasm instr::'args'::0 meta)
+        ']\n'
+      ] '')
+    ...      =>
+      (join [
+        '  mov '
+        dest-var::'loc'
+        ','
+        (arg-gen-asm-linux-x86_64-fasm instr::'args'::0 meta)
+        '\n'
+      ] '')))
 
 (let reverse \list ->
   (sort \item -> true <> list))
@@ -71,16 +82,29 @@
       (let param param-indexed::0)
       (let index param-indexed::1)
       (let type (get-arg-type-type param meta))
-      (join [
-        '  mov '
-        (if (< index (len LINUX-x86_64-FASM-PROC-PARAM-REGS::type))
-          LINUX-x86_64-FASM-PROC-PARAM-REGS::type::index
-         else
-          'bruh')
-        ','
-        (arg-gen-asm-linux-x86_64-fasm param meta)
-        '\n'
-      ] '') <>
+      (match type
+        TYPE-PTR =>
+          (join [
+            '  lea '
+            (if (< index (len LINUX-x86_64-FASM-PROC-PARAM-REGS::type))
+              LINUX-x86_64-FASM-PROC-PARAM-REGS::type::index
+             else
+              'bruh')
+            ',['
+            (arg-gen-asm-linux-x86_64-fasm param meta)
+            ']\n'
+          ] '')
+        ...      =>
+          (join [
+            '  mov '
+            (if (< index (len LINUX-x86_64-FASM-PROC-PARAM-REGS::type))
+              LINUX-x86_64-FASM-PROC-PARAM-REGS::type::index
+             else
+              'bruh')
+            ','
+            (arg-gen-asm-linux-x86_64-fasm param meta)
+            '\n'
+          ] '')) <>
     (reverse (zip params (gen-range 0 (len params))))))
 
 (let call-gen-asm-linux-x86_64-fasm \instr meta ir ->
