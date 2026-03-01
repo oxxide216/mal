@@ -220,8 +220,10 @@
   ]))
 
 (let parse-type \->
-  (parse-select [
-    (name-token TT-IDENT 'type')
+  (parse-node 'type' [
+    (parse-select [
+      (name-token TT-IDENT 'type')
+    ])
   ]))
 
 (let parse-param \->

@@ -48,3 +48,36 @@
 (let ARG-INT    (count 0))
 (let ARG-STRING (count))
 (let ARG-VAR    (count))
+
+(let TYPE-S8  (count 0))
+(let TYPE-S16 (count))
+(let TYPE-S32 (count))
+(let TYPE-S64 (count))
+(let TYPE-U8  (count))
+(let TYPE-U16 (count))
+(let TYPE-U32 (count))
+(let TYPE-U64 (count))
+(let TYPE-PTR (count))
+
+(let TYPES-MAP {
+  's8':  TYPE-S8
+  's16': TYPE-S16
+  's32': TYPE-S32
+  's64': TYPE-S64
+  'u8':  TYPE-U8
+  'u16': TYPE-U16
+  'u32': TYPE-U32
+  'u64': TYPE-U64
+})
+
+(let type-to-str \type ->
+  (match type::'type'
+    TYPE-S8  => 's8'
+    TYPE-S16 => 's16'
+    TYPE-S32 => 's32'
+    TYPE-S64 => 's64'
+    TYPE-U8  => 'u8'
+    TYPE-U16 => 'u16'
+    TYPE-U32 => 'u32'
+    TYPE-U64 => 'u64'
+    TYPE-PTR => (+ '&' (type-to-str type::'value'))))

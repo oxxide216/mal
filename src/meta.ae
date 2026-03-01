@@ -1,9 +1,21 @@
+(use 'defs')
+
 (let init-meta \proc-name ->
   {
     'name': proc-name
     'vars': {}
+    'procs': []
     'str-ids': {}
     'strs-count': 0
+  })
+
+(let init-proc-meta \proc ->
+  {
+    'name': proc::'name'
+    'param-types':
+      (map
+        \param -> param::'type' <>
+        proc::'params')
   })
 
 (let gen-meta-arg \meta arg index ->
@@ -15,6 +27,11 @@
     ARG-VAR    =>
       (do
         (let name arg::'value')
+
+        (if (unit? meta::'vars'::name)
+          (error 'Symbol ' name ' was not defined before usage')
+          (exit 1))
+
         (set meta::'vars'::name::'uses' (+ meta::'vars'::name::'uses' 1))
         (set meta::'vars'::name::'end' index)))
   meta)
@@ -65,9 +82,22 @@
       (do
         (let params-indexed (zip item::'params' (gen-range 0 (len item::'params'))))
         (let body-indexed (zip item::'body' (gen-range 0 (len item::'body'))))
-        (let params-meta (fold gen-meta-param (init-meta item::'name') params-indexed))
-        (with item 'meta' (fold gen-meta-instr params-meta body-indexed)))
-    ITEM-EXTERN-PROC-DECL => item))
+        (let meta (fold gen-meta-param (init-meta item::'name') params-indexed))
+        (set meta::'proc-metas' (after meta::'procs' (init-proc-meta item)))
+        (with item 'meta' (fold gen-meta-instr meta body-indexed)))
+    ITEM-EXTERN-PROC-DECL =>
+      (do
+        (let meta (init-meta item::'name'))
+        (with meta::'proc-metas' (after meta::'proc-metas' (init-proc item))))))
 
 (let gen-meta \ir ->
-  (map gen-meta-item ir))
+  (let full-ir (map gen-meta-item ir))
+  (let proc-metas
+    (fold
+      \metas item ->
+        (match item::'type'
+          ITEM-PROC-DEF  => (after metas (init-proc-meta item))
+          ...            => metas) <>
+      []
+      full-ir))
+  [full-ir proc-metas])

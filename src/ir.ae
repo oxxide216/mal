@@ -77,7 +77,10 @@
             \param ->
               {
                 'name': param::'name'
-                'type': param::'type'
+                'type': {
+                  'type': TYPES-MAP::(do param::'type'::'type')
+                  'value': param::'value'
+                }
               } <>
             instr::'params')
         'body': (gen-ir-items instr::'body' gen-ir-instr)
@@ -92,7 +95,10 @@
             \param ->
               {
                 'name': param::'name'
-                'type': param::'type'
+                'type': {
+                  'type': TYPES-MAP::(do param::'type'::'type')
+                  'value': param::'value'
+                }
               } <>
             instr::'params')
       }

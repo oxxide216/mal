@@ -7,6 +7,7 @@
 (use 'parser')
 (use 'ir')
 (use 'meta')
+(use 'checker')
 (use 'targets')
 
 (let config (parse-args (from (get-args) 1)))
@@ -33,11 +34,13 @@
   (println ir))
 
 (let meta-ir (gen-meta ir))
-(if (== config::'debug-output' DEBUG-OUTPUT-META)
-  (println meta-ir))
+(if (== config::'debug-output' DEBUG-OUTPUT-TYPES)
+  (println meta-ir::1))
+
+(type-check meta-ir::0 meta-ir::1)
 
 (let gen-asm TARGETS::(do config::'target'))
-(let asm (gen-asm meta-ir (not config::'libc')))
+(let asm (gen-asm meta-ir::0 (not config::'libc')))
 (if (== config::'debug-output' DEBUG-OUTPUT-ASM)
   (print asm))
 
@@ -49,5 +52,9 @@
 (let link-cmd (join (+ [linker '-o' config::'output-path' obj-path] config::'link-args') ' '))
 
 (write-file asm-path asm)
-(run-command asm-cmd)
-(run-command link-cmd)
+(let asm-result (run-command asm-cmd))
+(if (!= asm-result 0)
+  (exit 1))
+(let link-result (run-command link-cmd))
+(if (!= link-result 0)
+  (exit 1))
