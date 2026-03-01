@@ -18,6 +18,9 @@
     'section \'.text\' executable\n'
   ] ''))
 
+(let LINUX-x86_64-FASM-ASM-BEGIN-DATA
+  'section \'.data\'\n')
+
 (let LINUX-x86_64-FASM-GENERAL-REGS [
   { 'name': 'rbx' 'saved': true }  ; callee-saved
   ;{ 'name': 'r10' 'saved': false } ; not callee-saved
@@ -39,8 +42,14 @@
 
 (let arg-gen-asm-linux-x86_64-fasm \arg meta ->
   (match arg::'type'
-    ARG-INT => arg::'value'
-    ARG-VAR => meta::(do arg::'value')::'loc'))
+    ARG-INT    => arg::'value'
+    ARG-STRING =>
+      (join [
+        meta::'name'
+        '@str'
+        (to-str meta::'str-ids'::(do arg::'value'))
+      ] '')
+    ARG-VAR    => meta::'vars'::(do arg::'value')::'loc'))
 
 (let return-gen-asm-linux-x86_64-fasm \instr meta ->
   (let end (if instr::'last' '' else '  ret\n'))
@@ -57,7 +66,7 @@
 (let assign-gen-asm-linux-x86_64-fasm \instr meta ->
   (join [
     '  mov '
-    meta::(do instr::'dest')::'loc'
+    meta::'vars'::(do instr::'dest')::'loc'
     ','
     (arg-gen-asm-linux-x86_64-fasm instr::'args'::0 meta)
     '\n'
@@ -77,7 +86,7 @@
          instr::'func'
          '\n'
          '  mov '
-         meta::(do instr::'dest')::'loc'
+         meta::'vars'::(do instr::'dest')::'loc'
          ',rax\n'
        ])
     ''))
@@ -122,14 +131,19 @@
           'loc': entry::'value'::'loc'
           'is-param': (not-unit? entry::'value'::'param-index')
         } <>
-      proc::'meta'))
+      proc::'meta'::'vars'))
+
+  (let non-param-vars-list
+    (filter
+      \var -> (not var::'is-param') <>
+      vars-list))
 
   (let unique-var-locs
     (fold
-      \locs entry ->
-        (with locs entry::'loc' entry::'is-param') <>
+      \locs var ->
+        (with locs var::'loc' var::'is-param') <>
       {}
-      vars-list))
+      non-param-vars-list))
 
   (let begin-asm
     (map
@@ -139,6 +153,17 @@
           entry::'value'
           false) <>
       unique-var-locs))
+
+  (let actual-begin-asm
+    (if (== begin-asm [])
+      begin-asm
+     else
+      (+
+        [
+          '  push rbp\n'
+          '  mov rbp,rsp\n'
+        ]
+        begin-asm)))
 
   (let body-asm
     (map
@@ -155,9 +180,19 @@
       unique-var-locs))
   (let end-asm-reversed (reverse end-asm))
 
+  (let actual-end-asm
+    (if (== end-asm-reversed [])
+      end-asm-reversed
+     else
+      (+
+        end-asm-reversed
+        [
+          '  leave\n'
+        ])))
+
   (join
     (+ ['public ' proc::'name' '\n' proc::'name' ':\n']
-       (after (+ begin-asm (+ body-asm end-asm-reversed)) ' ret\n'))
+       (after (+ actual-begin-asm (+ body-asm actual-end-asm)) '  ret\n'))
     ''))
 
 (let extern-proc-gen-asm-linux-x86_64-fasm \proc ->
@@ -170,6 +205,21 @@
   (match item::'type'
     ITEM-PROC-DEF         => (proc-gen-asm-linux-x86_64-fasm item)
     ITEM-EXTERN-PROC-DECL => (extern-proc-gen-asm-linux-x86_64-fasm item)))
+
+(let proc-data-gen-asm-linux-x86_64-fasm \meta ->
+  (join
+    (map
+      \str ->
+        (join [
+          meta::'name'
+          '@str'
+          (to-str str::'value')
+          ': db '
+          str::'key'
+          '\n'
+        ] '') <>
+      meta::'str-ids')
+    ''))
 
 (let proc-alloc-regs-linux-x86_64-fasm \item ->
   (match item::'type'
@@ -185,10 +235,21 @@
 
 (let gen-asm-linux-x86_64-fasm \ir gen-start ->
   (let full-ir (map proc-alloc-regs-linux-x86_64-fasm ir))
-  (let asm (map item-gen-asm-linux-x86_64-fasm full-ir))
-  (+
-    (if gen-start
-      LINUX-x86_64-FASM-ASM-BEGIN-WITH-START
-     else
-      LINUX-x86_64-FASM-ASM-BEGIN-WITHOUT-START)
-    (join asm '')))
+  (let full-proc-defs (filter \item -> (== item::'type' ITEM-PROC-DEF) <> full-ir))
+  (let code-asm (map item-gen-asm-linux-x86_64-fasm full-ir))
+  (let data-asm
+    (map
+      \proc -> (proc-data-gen-asm-linux-x86_64-fasm proc::'meta') <>
+      full-proc-defs))
+  (join
+    (before
+      (if gen-start
+        LINUX-x86_64-FASM-ASM-BEGIN-WITH-START
+       else
+        LINUX-x86_64-FASM-ASM-BEGIN-WITHOUT-START)
+      (+
+        code-asm
+        (before
+          LINUX-x86_64-FASM-ASM-BEGIN-DATA
+          data-asm)))
+    ''))

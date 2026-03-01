@@ -176,6 +176,9 @@
       (parse-node 'int' [
         (name-token TT-INT 'value')
       ])
+      (parse-node 'str' [
+        (name-token TT-STRING 'value')
+      ])
       (parse-node 'var' [
         (name-token TT-IDENT 'name')
       ])

@@ -1,5 +1,6 @@
 proc main()
   one()
+  str = "Hello, World!"
   result = args(2, 2)
   retval result
 end

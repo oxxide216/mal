@@ -32,13 +32,13 @@
 (if (== config::'debug-output' DEBUG-OUTPUT-IR)
   (println ir))
 
-(let meta-ir (map gen-meta-item ir))
+(let meta-ir (gen-meta ir))
 (if (== config::'debug-output' DEBUG-OUTPUT-META)
   (println meta-ir))
 
 (let gen-asm TARGETS::(do config::'target'))
 (let asm (gen-asm meta-ir (not config::'no-start')))
 (if (== config::'debug-output' DEBUG-OUTPUT-ASM)
-  (println asm))
+  (print asm))
 
 (write-file config::'output-path' asm)

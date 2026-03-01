@@ -74,15 +74,22 @@
 
 (let lex-lit \lit ->
   \lexer ->
+    (if (== lit '')
+      (ret [lexer '']))
     (let current (! (lex-next lexer)))
     (if (== current::1 lit::0)
-      (let next ((lex-lit (get-range lit 1 (len lit))) current::0))
-      (if (unit? next)
-        current
-       else
-        [next::0 (+ current::1 next::1)])
+      (let next (? ((lex-lit (get-range lit 1 (len lit))) current::0)))
+      [next::0 (+ current::1 next::1)]
      else
       unit))
+
+(let lex-seq \list ->
+  \lexer ->
+    (if (== list [])
+      (ret [lexer '']))
+    (let next (? ((head list) lexer)))
+    (let nnext (? ((lex-seq (tail list)) next::0)))
+    [nnext::0 (+ next::1 nnext::1)])
 
 (let WHITESPACES [' ' '\t' '\n' '\r'])
 
@@ -119,6 +126,14 @@
 (let lex-comma  (lex-lit ','))
 (let lex-colon  (lex-lit ':'))
 
+(let lex-string
+  (lex-seq [
+    (lex-lit '"')
+    (lex-while
+      \char -> (!= char '"'))
+    (lex-lit '"')
+  ]))
+
 (let lex-grammar [
   (new-grammar lex-whitespace TT-WHITESPACE)
   (new-grammar lex-comment    TT-COMMENT)
@@ -133,6 +148,7 @@
   (new-grammar lex-assign     TT-ASSIGN)
   (new-grammar lex-comma      TT-COMMA)
   (new-grammar lex-colon      TT-COLON)
+  (new-grammar lex-string     TT-STRING)
 ])
 
 (let lexx \lexer ->

@@ -6,6 +6,10 @@
       'type': ARG-INT
       'value': arg::'int'::'value'
     }
+    (not-unit? arg::'str') => {
+      'type': ARG-STRING
+      'value': arg::'str'::'value'
+    }
     (not-unit? arg::'var') => {
       'type': ARG-VAR
       'value': arg::'var'::'name'

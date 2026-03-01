@@ -1,12 +1,23 @@
+(let init-meta \proc-name ->
+  {
+    'name': proc-name
+    'vars': {}
+    'str-ids': {}
+    'strs-count': 0
+  })
+
 (let gen-meta-arg \meta arg index ->
   (match arg::'type'
-    ARG-INT => meta
-    ARG-VAR =>
+    ARG-STRING =>
+      (do
+        (set meta::'str-ids'::(do arg::'value') meta::'strs-count')
+        (set meta::'strs-count' (+ meta::'strs-count' 1)))
+    ARG-VAR    =>
       (do
         (let name arg::'value')
-        (set meta::name::'uses' (+ meta::name::'uses' 1))
-        (set meta::name::'end' index)
-        meta)))
+        (set meta::'vars'::name::'uses' (+ meta::'vars'::name::'uses' 1))
+        (set meta::'vars'::name::'end' index)))
+  meta)
 
 (let gen-meta-instr \meta instr ->
   (let args-meta
@@ -14,11 +25,11 @@
       \meta arg -> (gen-meta-arg meta arg instr::1) <>
       meta
       instr::0::'args'))
+
   (match instr::0::'type'
     INSTR-ASSIGN =>
-      (with
-        args-meta
-        instr::0::'dest'
+      (set
+        args-meta::'vars'::(do instr::0::'dest')
         {
           'uses': 0
           'begin': instr::1
@@ -26,27 +37,27 @@
           'param-index': unit
         })
     INSTR-CALL-ASSIGN =>
-      (with
-        args-meta
-        instr::0::'dest'
+      (set
+        args-meta::'vars'::(do instr::0::'dest')
         {
           'uses': 0
           'begin': instr::1
           'end': instr::1
           'param-index': unit
-        })
-    ...          => args-meta))
+        }))
+
+  args-meta)
 
 (let gen-meta-param \meta param ->
-  (with
-    meta
-    param::0::'name'
+  (set
+    meta::'vars'::(do param::0::'name')
     {
       'uses': 0
       'begin': 0
       'end': 0
       'param-index': param::1
-    }))
+    })
+  meta)
 
 (let gen-meta-item \item ->
   (match item::'type'
@@ -54,6 +65,9 @@
       (do
         (let params-indexed (zip item::'params' (gen-range 0 (len item::'params'))))
         (let body-indexed (zip item::'body' (gen-range 0 (len item::'body'))))
-        (let params-meta (fold gen-meta-param {} params-indexed))
+        (let params-meta (fold gen-meta-param (init-meta item::'name') params-indexed))
         (with item 'meta' (fold gen-meta-instr params-meta body-indexed)))
     ITEM-EXTERN-PROC-DECL => item))
+
+(let gen-meta \ir ->
+  (map gen-meta-item ir))
