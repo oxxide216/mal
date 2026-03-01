@@ -91,12 +91,20 @@
        ])
     ''))
 
+(let inline-asm-gen-asm-linux-x86_64-fasm \instr meta ->
+  (let code (get-range instr::'code' 1 (- (len instr::'code') 1)))
+  (if (begins-with instr::'code' '"  ')
+    (+ code '\n')
+   else
+    (+ '  ' (+ code '\n'))))
+
 (let instr-gen-asm-linux-x86_64-fasm \instr meta ->
   (match instr::'type'
     INSTR-RETURN      => (return-gen-asm-linux-x86_64-fasm instr meta)
     INSTR-ASSIGN      => (assign-gen-asm-linux-x86_64-fasm instr meta)
     INSTR-CALL        => (call-gen-asm-linux-x86_64-fasm instr meta)
-    INSTR-CALL-ASSIGN => (call-assign-gen-asm-linux-x86_64-fasm instr meta)))
+    INSTR-CALL-ASSIGN => (call-assign-gen-asm-linux-x86_64-fasm instr meta)
+    INSTR-INLINE-ASM  => (inline-asm-gen-asm-linux-x86_64-fasm instr meta)))
 
 (let proc-params-gen-asm-linux-x86_64-fasm \args meta ->
   (map

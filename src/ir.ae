@@ -53,6 +53,14 @@
         'last': last
       }
     ]
+    'inline-asm' => [
+      {
+        'type': INSTR-INLINE-ASM
+        'code': instr::'code'
+        'args': []
+        'last': last
+      }
+    ]
     ... =>
       (do
         (error 'Unknown AST tag: `' instr::'tag' '`')

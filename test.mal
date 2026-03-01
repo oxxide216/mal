@@ -2,6 +2,11 @@ proc main()
   one()
   str = "Hello, World!"
   result = args(2, 2)
+  "mov rax,1"
+  "mov rdi,1"
+  "mov rsi,main@str0"
+  "mov rdx,13"
+  "syscall"
   retval result
 end
 

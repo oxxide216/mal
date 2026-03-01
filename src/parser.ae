@@ -214,6 +214,9 @@
         (parse-expr))
       (skip-token TT-CPAREN)
     ])
+    (parse-node 'inline-asm' [
+      (name-token TT-STRING 'code')
+    ])
   ]))
 
 (let parse-type \->
