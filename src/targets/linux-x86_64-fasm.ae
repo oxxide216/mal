@@ -214,6 +214,32 @@
     ITEM-PROC-DEF         => (proc-gen-asm-linux-x86_64-fasm item)
     ITEM-EXTERN-PROC-DECL => (extern-proc-gen-asm-linux-x86_64-fasm item)))
 
+(let escape-str \str ->
+  (let index (get-index str '\\'))
+  (match index
+    unit => str
+    ...  =>
+    (do
+      (let prev (get-range str 0 index))
+      (let char str::(+ index 1))
+      (let next (get-range str (+ index 2) (len str)))
+      (match char
+        'n' => (+ prev (+ '\n' (escape-str next)))
+        'r' => (+ prev (+ '\r' (escape-str next)))
+        't' => (+ prev (+ '\t' (escape-str next)))
+        'v' => (+ prev (+ '\v' (escape-str next)))
+        'e' => (+ prev (+ '\e' (escape-str next)))
+        'b' => (+ prev (+ '\b' (escape-str next)))
+        '0' => (+ prev (+ '\0' (escape-str next)))
+        ... => (+ prev (+ char (escape-str next)))))))
+
+(let str-to-bytes \str ->
+  (let chars (split (get-range str 1 (- (len str) 1)) ''))
+  (let proper-chars (get-range chars 1 (len chars)))
+  (let bytes (map \char -> (to-int8 (to-bytes char)) <> proper-chars))
+  (let byte-strs (map \byte -> (to-str byte) <> bytes))
+  (join byte-strs ','))
+
 (let proc-data-gen-asm-linux-x86_64-fasm \meta ->
   (join
     (map
@@ -223,7 +249,7 @@
           '@str'
           (to-str str::'value')
           ': db '
-          str::'key'
+          (str-to-bytes (escape-str str::'key'))
           '\n'
         ] '') <>
       meta::'str-ids')
