@@ -18,10 +18,11 @@
 
 (let default-parsed-args {
   'args': []
-  'output-path': 'out.s'
+  'output-path': 'out'
   'target': TARGET-LINUX-X86_64-FASM
   'debug-output': unit
-  'no-start': false
+  'libc': false
+  'temp-dir': '/tmp'
 })
 
 (let print-usage \->
@@ -75,10 +76,18 @@
         (with (parse-args (from args 2))
               'debug-output'
               new-mode))
-    '--no-start' =>
+    '--libc' =>
       (with (parse-args (from args 2))
-            'no-start'
+            'libc'
             true)
+    '--temp' =>
+      (do
+        (if (< (len args) 2)
+          (error '-temp flag requires an argument')
+          (exit 1))
+        (with (parse-args (from args 2))
+              'temp-dir'
+              args::1))
     ... =>
       (do
         (if (begins-with (head args) '-')

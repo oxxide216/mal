@@ -37,8 +37,17 @@
   (println meta-ir))
 
 (let gen-asm TARGETS::(do config::'target'))
-(let asm (gen-asm meta-ir (not config::'no-start')))
+(let asm (gen-asm meta-ir (not config::'libc')))
 (if (== config::'debug-output' DEBUG-OUTPUT-ASM)
   (print asm))
 
-(write-file config::'output-path' asm)
+(let temp-base-name (to-str (hash code)))
+(let asm-path (join [config::'temp-dir' '/' temp-base-name '.s'] ''))
+(let obj-path (join [config::'temp-dir' '/' temp-base-name '.o'] ''))
+(let asm-cmd (join ['fasm' asm-path obj-path] ' '))
+(let linker (if config::'libc' 'cc' else 'ld'))
+(let link-cmd (join [linker '-o' config::'output-path' obj-path] ' '))
+
+(write-file asm-path asm)
+(run-command asm-cmd)
+(run-command link-cmd)
