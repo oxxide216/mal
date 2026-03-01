@@ -1,0 +1,114 @@
+(let LINUX-x86_64-FASM-GENERAL-REGS-INT64 [
+  { 'name': 'rbx' 'saved': true }  ; callee-saved
+  ;{ 'name': 'r10' 'saved': false } ; not callee-saved
+  ;{ 'name': 'r11' 'saved': false } ; not callee-saved
+  { 'name': 'r12' 'saved': true }  ; callee-saved
+  { 'name': 'r13' 'saved': true }  ; callee-saved
+  { 'name': 'r14' 'saved': true }  ; callee-saved
+  { 'name': 'r15' 'saved': true }  ; callee-saved
+])
+
+(let LINUX-x86_64-FASM-GENERAL-REGS-INT32 [
+  { 'name': 'ebx' 'saved': true }  ; callee-saved
+  ;{ 'name': 'r10d' 'saved': false } ; not callee-saved
+  ;{ 'name': 'r11d' 'saved': false } ; not callee-saved
+  { 'name': 'r12d' 'saved': true }  ; callee-saved
+  { 'name': 'r13d' 'saved': true }  ; callee-saved
+  { 'name': 'r14d' 'saved': true }  ; callee-saved
+  { 'name': 'r15d' 'saved': true }  ; callee-saved
+])
+
+(let LINUX-x86_64-FASM-GENERAL-REGS-INT16 [
+  { 'name': 'bx' 'saved': true }  ; callee-saved
+  ;{ 'name': 'r10w' 'saved': false } ; not callee-saved
+  ;{ 'name': 'r11w' 'saved': false } ; not callee-saved
+  { 'name': 'r12w' 'saved': true }  ; callee-saved
+  { 'name': 'r13w' 'saved': true }  ; callee-saved
+  { 'name': 'r14w' 'saved': true }  ; callee-saved
+  { 'name': 'r15w' 'saved': true }  ; callee-saved
+])
+
+(let LINUX-x86_64-FASM-GENERAL-REGS-INT8 [
+  { 'name': 'bl' 'saved': true }  ; callee-saved
+  ;{ 'name': 'r10b' 'saved': false } ; not callee-saved
+  ;{ 'name': 'r11b' 'saved': false } ; not callee-saved
+  { 'name': 'r12b' 'saved': true }  ; callee-saved
+  { 'name': 'r13b' 'saved': true }  ; callee-saved
+  { 'name': 'r14b' 'saved': true }  ; callee-saved
+  { 'name': 'r15b' 'saved': true }  ; callee-saved
+])
+
+(let LINUX-x86_64-FASM-PROC-PARAM-REGS-INT64 [
+  'rdi'
+  'rsi'
+  'rdx'
+  'rcx'
+  'r8'
+  'r9'
+])
+
+(let LINUX-x86_64-FASM-PROC-PARAM-REGS-INT32 [
+  'edi'
+  'esi'
+  'edx'
+  'ecx'
+  'r8d'
+  'r9d'
+])
+
+(let LINUX-x86_64-FASM-PROC-PARAM-REGS-INT16 [
+  'di'
+  'si'
+  'dx'
+  'cx'
+  'r8w'
+  'r9w'
+])
+
+(let LINUX-x86_64-FASM-PROC-PARAM-REGS-INT8 [
+  'dil'
+  'sil'
+  'dl'
+  'cl'
+  'r8b'
+  'r9b'
+])
+
+(let LINUX-x86_64-FASM-GENERAL-REGS {
+  TYPE-UNIT: LINUX-x86_64-FASM-GENERAL-REGS-INT8
+  TYPE-S8:   LINUX-x86_64-FASM-GENERAL-REGS-INT8
+  TYPE-S16:  LINUX-x86_64-FASM-GENERAL-REGS-INT16
+  TYPE-S32:  LINUX-x86_64-FASM-GENERAL-REGS-INT32
+  TYPE-S64:  LINUX-x86_64-FASM-GENERAL-REGS-INT64
+  TYPE-U8:   LINUX-x86_64-FASM-GENERAL-REGS-INT8
+  TYPE-U16:  LINUX-x86_64-FASM-GENERAL-REGS-INT16
+  TYPE-U32:  LINUX-x86_64-FASM-GENERAL-REGS-INT32
+  TYPE-U64:  LINUX-x86_64-FASM-GENERAL-REGS-INT64
+  TYPE-PTR:  LINUX-x86_64-FASM-GENERAL-REGS-INT64
+})
+
+(let LINUX-x86_64-FASM-PROC-PARAM-REGS {
+  TYPE-UNIT: LINUX-x86_64-FASM-PROC-PARAM-REGS-INT8
+  TYPE-S8:   LINUX-x86_64-FASM-PROC-PARAM-REGS-INT8
+  TYPE-S16:  LINUX-x86_64-FASM-PROC-PARAM-REGS-INT16
+  TYPE-S32:  LINUX-x86_64-FASM-PROC-PARAM-REGS-INT32
+  TYPE-S64:  LINUX-x86_64-FASM-PROC-PARAM-REGS-INT64
+  TYPE-U8:   LINUX-x86_64-FASM-PROC-PARAM-REGS-INT8
+  TYPE-U16:  LINUX-x86_64-FASM-PROC-PARAM-REGS-INT16
+  TYPE-U32:  LINUX-x86_64-FASM-PROC-PARAM-REGS-INT32
+  TYPE-U64:  LINUX-x86_64-FASM-PROC-PARAM-REGS-INT64
+  TYPE-PTR:  LINUX-x86_64-FASM-PROC-PARAM-REGS-INT64
+})
+
+(let LINUX-x86_64-FASM-RETURN-REG {
+  TYPE-UNIT: 'al'
+  TYPE-S8:   'al'
+  TYPE-S16:  'ax'
+  TYPE-S32:  'eax'
+  TYPE-S64:  'rax'
+  TYPE-U8:   'al'
+  TYPE-U16:  'ax'
+  TYPE-U32:  'eax'
+  TYPE-U64:  'rax'
+  TYPE-PTR:  'rax'
+})

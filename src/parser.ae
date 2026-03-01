@@ -242,6 +242,11 @@
       (skip-token TT-COMMA)
       (parse-param))
     (skip-token TT-CPAREN)
+    (parse-opt
+      (parse-node 'return' [
+        (skip-token TT-ARROW)
+        (parse-type)
+      ]))
     (parse-list 'body'
       (parse-statement))
     (skip-token TT-END)
@@ -257,6 +262,11 @@
       (skip-token TT-COMMA)
       (parse-param))
     (skip-token TT-CPAREN)
+    (parse-opt
+      (parse-node 'return' [
+        (skip-token TT-ARROW)
+        (parse-type)
+      ]))
   ]))
 
 (let parse-program \->

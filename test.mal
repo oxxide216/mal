@@ -1,4 +1,4 @@
-proc main()
+proc main() -> s32
   one()
   str = "Hello, World!\n"
   result = args(2, 2)
@@ -10,11 +10,11 @@ proc main()
   retval result
 end
 
-proc one()
+proc one() -> s32
   retval 1
 end
 
-proc var()
+proc var() -> s32
   c = 1
   a = 2
   b = a
@@ -22,6 +22,6 @@ proc var()
   retval b
 end
 
-proc args(a: s32, b: s32)
+proc args(a: s32, b: s32) -> s32
   retval a
 end

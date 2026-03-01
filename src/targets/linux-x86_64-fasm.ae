@@ -1,3 +1,4 @@
+(use 'regs-x86_64')
 (use 'alloc')
 
 (let LINUX-x86_64-FASM-ASM-BEGIN-WITH-START
@@ -21,25 +22,6 @@
 (let LINUX-x86_64-FASM-ASM-BEGIN-DATA
   'section \'.data\'\n')
 
-(let LINUX-x86_64-FASM-GENERAL-REGS [
-  { 'name': 'rbx' 'saved': true }  ; callee-saved
-  ;{ 'name': 'r10' 'saved': false } ; not callee-saved
-  ;{ 'name': 'r11' 'saved': false } ; not callee-saved
-  { 'name': 'r12' 'saved': true }  ; callee-saved
-  { 'name': 'r13' 'saved': true }  ; callee-saved
-  { 'name': 'r14' 'saved': true }  ; callee-saved
-  { 'name': 'r15' 'saved': true }  ; callee-saved
-])
-
-(let LINUX-x86_64-FASM-PROC-PARAM-REGS [
-  'rdi'
-  'rsi'
-  'rdx'
-  'rcx'
-  'r8'
-  'r9'
-])
-
 (let arg-gen-asm-linux-x86_64-fasm \arg meta ->
   (match arg::'type'
     ARG-INT    => arg::'value'
@@ -57,11 +39,12 @@
     unit => end
     ...  =>
       (do
+        (let return-loc LINUX-x86_64-FASM-RETURN-REG::(do meta::'return-type'::'type'))
         (let loc (arg-gen-asm-linux-x86_64-fasm instr::'args'::0 meta))
-        (if (== loc 'rax')
+        (if (== loc return-loc)
           end
          else
-          (join ['  mov rax,' loc '\n' end] '')))))
+          (join ['  mov ' return-loc ',' loc '\n' end] '')))))
 
 (let assign-gen-asm-linux-x86_64-fasm \instr meta ->
   (join [
@@ -72,22 +55,46 @@
     '\n'
   ] ''))
 
-(let call-gen-asm-linux-x86_64-fasm \instr meta ->
+(let reverse \list ->
+  (sort \item -> true <> list))
+
+(let proc-params-gen-asm-linux-x86_64-fasm \params meta ir ->
+  (map
+    \param-indexed ->
+      (let param param-indexed::0)
+      (let index param-indexed::1)
+      (let type param::'type')
+      (join [
+        '  mov '
+        (if (< index (len LINUX-x86_64-FASM-PROC-PARAM-REGS::type))
+          LINUX-x86_64-FASM-PROC-PARAM-REGS::type::index
+         else
+          'bruh')
+        ','
+        (arg-gen-asm-linux-x86_64-fasm param meta)
+        '\n'
+      ] '') <>
+    (reverse (zip params (gen-range 0 (len params))))))
+
+(let call-gen-asm-linux-x86_64-fasm \instr meta ir ->
   (join
-    (+ (proc-params-gen-asm-linux-x86_64-fasm instr::'args' meta)
+    (+ (proc-params-gen-asm-linux-x86_64-fasm instr::'args' meta ir)
        ['  call ' instr::'func' '\n'])
     ''))
 
-(let call-assign-gen-asm-linux-x86_64-fasm \instr meta ->
+(let call-assign-gen-asm-linux-x86_64-fasm \instr meta ir ->
+  (let dest-var meta::'vars'::(do instr::'dest'))
   (join
-    (+ (proc-params-gen-asm-linux-x86_64-fasm instr::'args' meta)
+    (+ (proc-params-gen-asm-linux-x86_64-fasm instr::'args' meta ir)
        [
          '  call '
          instr::'func'
          '\n'
          '  mov '
-         meta::'vars'::(do instr::'dest')::'loc'
-         ',rax\n'
+         dest-var::'loc'
+         ','
+         LINUX-x86_64-FASM-RETURN-REG::(do dest-var::'type'::'type')
+         '\n'
        ])
     ''))
 
@@ -98,45 +105,27 @@
    else
     (+ '  ' (+ code '\n'))))
 
-(let instr-gen-asm-linux-x86_64-fasm \instr meta ->
+(let instr-gen-asm-linux-x86_64-fasm \instr meta ir ->
   (match instr::'type'
     INSTR-RETURN      => (return-gen-asm-linux-x86_64-fasm instr meta)
     INSTR-ASSIGN      => (assign-gen-asm-linux-x86_64-fasm instr meta)
-    INSTR-CALL        => (call-gen-asm-linux-x86_64-fasm instr meta)
-    INSTR-CALL-ASSIGN => (call-assign-gen-asm-linux-x86_64-fasm instr meta)
+    INSTR-CALL        => (call-gen-asm-linux-x86_64-fasm instr meta ir)
+    INSTR-CALL-ASSIGN => (call-assign-gen-asm-linux-x86_64-fasm instr meta ir)
     INSTR-INLINE-ASM  => (inline-asm-gen-asm-linux-x86_64-fasm instr meta)))
-
-(let proc-params-gen-asm-linux-x86_64-fasm \args meta ->
-  (map
-    \arg-indexed ->
-      (let arg arg-indexed::0)
-      (let index arg-indexed::1)
-      (join [
-        '  mov '
-        (if (< index (len LINUX-x86_64-FASM-PROC-PARAM-REGS))
-          LINUX-x86_64-FASM-PROC-PARAM-REGS::index
-         else
-          'bruh')
-        ','
-        (arg-gen-asm-linux-x86_64-fasm arg meta)
-        '\n'
-      ] '') <>
-    (zip args (gen-range 0 (len args)))))
 
 (let proc-segment-var-gen-asm-linux-x86_64-fasm \loc is-param is-end ->
   (match is-param
     true  => ''
     false => (join [(if is-end '  pop ' else '  push ') loc '\n'] '')))
 
-(let reverse \list ->
-  (sort \item -> true <> list))
-
-(let proc-gen-asm-linux-x86_64-fasm \proc ->
+(let proc-gen-asm-linux-x86_64-fasm \proc ir ->
   (let vars-list
     (map
       \entry ->
         {
           'loc': entry::'value'::'loc'
+          'loc-index': entry::'value'::'loc-index'
+          'type': entry::'value'::'type'
           'is-param': (not-unit? entry::'value'::'param-index')
         } <>
       proc::'meta'::'vars'))
@@ -149,7 +138,10 @@
   (let unique-var-locs
     (fold
       \locs var ->
-        (with locs var::'loc' var::'is-param') <>
+        (let type (type-to-stack var::'type'::'type'))
+        (let loc-index var::'loc-index')
+        (let loc LINUX-x86_64-FASM-GENERAL-REGS::type::loc-index)
+        (with locs loc::'name' var::'is-param') <>
       {}
       non-param-vars-list))
 
@@ -175,7 +167,7 @@
 
   (let body-asm
     (map
-      \instr -> (instr-gen-asm-linux-x86_64-fasm instr proc::'meta') <>
+      \instr -> (instr-gen-asm-linux-x86_64-fasm instr proc::'meta' ir) <>
       proc::'body'))
 
   (let end-asm
@@ -209,9 +201,9 @@
     proc::'name' ' = plt _' proc::'name' '\n'
   ] ''))
 
-(let item-gen-asm-linux-x86_64-fasm \item ->
+(let item-gen-asm-linux-x86_64-fasm \item ir ->
   (match item::'type'
-    ITEM-PROC-DEF         => (proc-gen-asm-linux-x86_64-fasm item)
+    ITEM-PROC-DEF         => (proc-gen-asm-linux-x86_64-fasm item ir)
     ITEM-EXTERN-PROC-DECL => (extern-proc-gen-asm-linux-x86_64-fasm item)))
 
 (let escape-str \str ->
@@ -270,7 +262,10 @@
 (let gen-asm-linux-x86_64-fasm \ir gen-start ->
   (let full-ir (map proc-alloc-regs-linux-x86_64-fasm ir))
   (let full-proc-defs (filter \item -> (== item::'type' ITEM-PROC-DEF) <> full-ir))
-  (let code-asm (map item-gen-asm-linux-x86_64-fasm full-ir))
+  (let code-asm
+    (map
+      \item -> (item-gen-asm-linux-x86_64-fasm item ir) <>
+      full-ir))
   (let data-asm
     (map
       \proc -> (proc-data-gen-asm-linux-x86_64-fasm proc::'meta') <>

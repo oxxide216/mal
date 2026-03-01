@@ -1,103 +1,166 @@
 (use 'defs')
 
-(let init-meta \proc-name ->
+(let init-param-types \params ->
+  (map \param -> param::'type' <> params))
+
+(let init-basic-meta \proc ->
   {
-    'name': proc-name
-    'vars': {}
-    'procs': []
-    'str-ids': {}
-    'strs-count': 0
+    'name': proc::'name'
+    'param-types': (init-param-types proc::'params')
+    'return-type': proc::'return-type'
   })
 
-(let init-proc-meta \proc ->
+(let init-meta \proc ->
   {
     'name': proc::'name'
     'param-types':
       (map
         \param -> param::'type' <>
         proc::'params')
+    'return-type': proc::'return-type'
+    'vars': {}
+    'called-procs': []
+    'str-ids': {}
+    'strs-count': 0
   })
 
-(let gen-meta-arg \meta arg index ->
-  (match arg::'type'
-    ARG-STRING =>
-      (do
-        (set meta::'str-ids'::(do arg::'value') meta::'strs-count')
-        (set meta::'strs-count' (+ meta::'strs-count' 1)))
-    ARG-VAR    =>
-      (do
-        (let name arg::'value')
+(let init-meta-gen \ir proc ->
+  {
+    'ir': ir
+    'meta': (init-meta proc)
+    'arg-types': []
+    'return-type': unit
+  })
 
-        (if (unit? meta::'vars'::name)
-          (error 'Symbol ' name ' was not defined before usage')
-          (exit 1))
+(let proc-signature-eq \proc name param-types ->
+  (and (== proc::'name' name)
+       (== (init-param-types proc::'params') param-types)))
 
-        (set meta::'vars'::name::'uses' (+ meta::'vars'::name::'uses' 1))
-        (set meta::'vars'::name::'end' index)))
-  meta)
+(let get-proc \ir name param-types ->
+  (let procs
+    (filter
+      \item -> (or (== item::'type' ITEM-PROC-DEF)
+                   (== item::'type' ITEM-EXTERN-PROC-DECL)) <>
+      ir))
+  (let results
+    (filter
+      \proc -> (proc-signature-eq proc name param-types) <>
+      procs))
+  (match results
+    []  => unit
+    ... => results::0))
 
-(let gen-meta-instr \meta instr ->
-  (let args-meta
+(let gen-meta-call \gen instr ->
+  (let callee (get-proc gen::'ir' instr::'func' gen::'arg-types'))
+  (if (unit? callee)
+    (let signature (join (map type-to-str gen::'arg-types') ', ') )
+    (error 'Procedure ' instr::'func' '(' signature ') was not defined before usage')
+    (set gen::'meta'::'has-errors' true))
+  (set gen::'meta'::'called-procs' (after gen::'meta'::'called-procs' callee))
+  (set gen::'return-type' callee::'return-type')
+  gen)
+
+(let gen-meta-arg \gen arg index ->
+  (let type
+    (match arg::'type'
+      ARG-INT    => {
+        'type': TYPE-S32
+        'value': unit
+      }
+      ARG-STRING =>
+        (do
+          (set gen::'meta'::'str-ids'::(do arg::'value') gen::'meta'::'strs-count')
+          (set gen::'meta'::'strs-count' (+ gen::'meta'::'strs-count' 1))
+          {
+            'type': TYPE-PTR
+            'value': {
+              'type': TYPE-U8
+              'value': unit
+            }
+          })
+      ARG-VAR    =>
+        (do
+          (let name arg::'value')
+
+          (if (unit? gen::'meta'::'vars'::name)
+            (error 'Symbol ' name ' was not defined before usage')
+            (set gen::'meta'::'has-errors' true))
+
+          (set gen::'meta'::'vars'::name::'uses'
+               (+ gen::'meta'::'vars'::name::'uses' 1))
+          (set gen::'meta'::'vars'::name::'end' index)
+
+          gen::'meta'::'vars'::name::'type')))
+
+  (with
+    gen
+    'arg-types'
+    (after gen::'arg-types' type)))
+
+(let gen-meta-instr \gen instr-indexed ->
+  (let instr instr-indexed::0)
+  (let index instr-indexed::1)
+  (let gen
     (fold
-      \meta arg -> (gen-meta-arg meta arg instr::1) <>
-      meta
-      instr::0::'args'))
+      \gen arg -> (gen-meta-arg gen arg index) <>
+      (with (with gen 'return-type' unit) 'arg-types' [])
+      instr::'args'))
 
-  (match instr::0::'type'
-    INSTR-ASSIGN =>
+  (match instr::'type'
+    INSTR-RETURN      =>
+      (if (!= gen::'arg-types'::0 gen::'meta'::'return-type')
+        (error gen::'meta'::'name' ': unexpected return type')
+        (set gen::'meta'::'has-errors' true))
+    INSTR-ASSIGN      =>
       (set
-        args-meta::'vars'::(do instr::0::'dest')
+        gen::'meta'::'vars'::(do instr::'dest')
         {
+          'type': gen::'arg-types'::0
           'uses': 0
-          'begin': instr::1
-          'end': instr::1
+          'begin': index
+          'end': index
           'param-index': unit
         })
+    INSTR-CALL        =>
+      (set gen (gen-meta-call gen instr))
     INSTR-CALL-ASSIGN =>
-      (set
-        args-meta::'vars'::(do instr::0::'dest')
-        {
-          'uses': 0
-          'begin': instr::1
-          'end': instr::1
-          'param-index': unit
-        }))
+      (do
+        (set gen (gen-meta-call gen instr))
+        (set
+          gen::'meta'::'vars'::(do instr::'dest')
+          {
+            'type': gen::'return-type'
+            'uses': 0
+            'begin': index
+            'end': index
+            'param-index': unit
+          })))
 
-  args-meta)
+  gen)
 
-(let gen-meta-param \meta param ->
+(let gen-meta-param \gen param ->
   (set
-    meta::'vars'::(do param::0::'name')
+    gen::'meta'::'vars'::(do param::0::'name')
     {
+      'type': gen::'meta'::'param-types'::(do param::1)
       'uses': 0
       'begin': 0
       'end': 0
       'param-index': param::1
     })
-  meta)
+  gen)
 
-(let gen-meta-item \item ->
+(let gen-meta-item \ir item ->
   (match item::'type'
     ITEM-PROC-DEF         =>
       (do
         (let params-indexed (zip item::'params' (gen-range 0 (len item::'params'))))
         (let body-indexed (zip item::'body' (gen-range 0 (len item::'body'))))
-        (let meta (fold gen-meta-param (init-meta item::'name') params-indexed))
-        (set meta::'proc-metas' (after meta::'procs' (init-proc-meta item)))
-        (with item 'meta' (fold gen-meta-instr meta body-indexed)))
+        (let gen (fold gen-meta-param (init-meta-gen ir item) params-indexed))
+        (with item 'meta' (fold gen-meta-instr gen body-indexed)::'meta'))
     ITEM-EXTERN-PROC-DECL =>
       (do
-        (let meta (init-meta item::'name'))
-        (with meta::'proc-metas' (after meta::'proc-metas' (init-proc item))))))
+        (with item 'meta' (init-basic-meta item)))))
 
 (let gen-meta \ir ->
-  (let full-ir (map gen-meta-item ir))
-  (let proc-metas
-    (fold
-      \metas item ->
-        (match item::'type'
-          ITEM-PROC-DEF  => (after metas (init-proc-meta item))
-          ...            => metas) <>
-      []
-      full-ir))
-  [full-ir proc-metas])
+  (map \item -> (gen-meta-item ir item) <> ir))

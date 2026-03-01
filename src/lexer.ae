@@ -109,23 +109,6 @@
 
 (let lex-int (lex-while is-number))
 
-(let lex-retval (lex-lit 'retval'))
-(let lex-proc   (lex-lit 'proc'))
-(let lex-end    (lex-lit 'end'))
-(let lex-extern (lex-lit 'extern'))
-
-(let lex-ident
-  (lex-then
-    is-ident-start
-    (lex-while
-      is-ident-part)))
-
-(let lex-oparen (lex-lit '('))
-(let lex-cparen (lex-lit ')'))
-(let lex-assign (lex-lit '='))
-(let lex-comma  (lex-lit ','))
-(let lex-colon  (lex-lit ':'))
-
 (let lex-string-internal
   (lex-seq [
     (lex-while
@@ -145,10 +128,29 @@
     (lex-lit '"')
   ]))
 
+(let lex-retval (lex-lit 'retval'))
+(let lex-proc   (lex-lit 'proc'))
+(let lex-end    (lex-lit 'end'))
+(let lex-extern (lex-lit 'extern'))
+
+(let lex-ident
+  (lex-then
+    is-ident-start
+    (lex-while
+      is-ident-part)))
+
+(let lex-oparen (lex-lit '('))
+(let lex-cparen (lex-lit ')'))
+(let lex-assign (lex-lit '='))
+(let lex-comma  (lex-lit ','))
+(let lex-colon  (lex-lit ':'))
+(let lex-arrow  (lex-lit '->'))
+
 (let lex-grammar [
   (new-grammar lex-whitespace TT-WHITESPACE)
   (new-grammar lex-comment    TT-COMMENT)
   (new-grammar lex-int        TT-INT)
+  (new-grammar lex-string     TT-STRING)
   (new-grammar lex-retval     TT-RETVAL)
   (new-grammar lex-proc       TT-PROC)
   (new-grammar lex-end        TT-END)
@@ -159,7 +161,7 @@
   (new-grammar lex-assign     TT-ASSIGN)
   (new-grammar lex-comma      TT-COMMA)
   (new-grammar lex-colon      TT-COLON)
-  (new-grammar lex-string     TT-STRING)
+  (new-grammar lex-arrow      TT-ARROW)
 ])
 
 (let lexx \lexer ->

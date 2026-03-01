@@ -1,5 +1,16 @@
 (use 'defs')
 
+(let gen-ir-type \node ->
+  (match node::'type'
+    '&'   => {
+      'type': TYPE-PTR
+      'value': (gen-ir-type node::'value')
+    }
+    ... => {
+      'type': TYPES-MAP::(do node::'type')
+      'value': unit
+    }))
+
 (let gen-ir-arg \arg ->
   (match true
     (not-unit? arg::'int') => {
@@ -66,7 +77,7 @@
         (error 'Unknown AST tag: `' instr::'tag' '`')
         (exit 1))))
 
-(let gen-ir-global-instr \instr last ->
+(let gen-ir-item \instr last ->
   (match instr::'tag'
     'proc-def' => [
       {
@@ -77,12 +88,13 @@
             \param ->
               {
                 'name': param::'name'
-                'type': {
-                  'type': TYPES-MAP::(do param::'type'::'type')
-                  'value': param::'value'
-                }
+                'type': (gen-ir-type param::'type')
               } <>
             instr::'params')
+        'return-type':
+          (match instr::'return'
+            unit => { 'type': TYPE-UNIT }
+            ...  => (gen-ir-type instr::'return'::'type'))
         'body': (gen-ir-items instr::'body' gen-ir-instr)
       }
     ]
@@ -95,12 +107,13 @@
             \param ->
               {
                 'name': param::'name'
-                'type': {
-                  'type': TYPES-MAP::(do param::'type'::'type')
-                  'value': param::'value'
-                }
+                'type': (gen-ir-type param::'type')
               } <>
             instr::'params')
+        'return-type':
+          (match instr::'return'
+            unit => { 'type': TYPE-UNIT }
+            ...  => (gen-ir-type instr::'return'::'type'))
       }
     ]))
 
@@ -111,4 +124,4 @@
     ... => (+ (gen-func items::0 false) (gen-ir-items (from items 1) gen-func))))
 
 (let gen-ir \program ->
-  (gen-ir-items program::'items' gen-ir-global-instr))
+  (gen-ir-items program::'items' gen-ir-item))

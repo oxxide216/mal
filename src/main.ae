@@ -7,7 +7,6 @@
 (use 'parser')
 (use 'ir')
 (use 'meta')
-(use 'checker')
 (use 'targets')
 
 (let config (parse-args (from (get-args) 1)))
@@ -34,13 +33,13 @@
   (println ir))
 
 (let meta-ir (gen-meta ir))
+(if (!= (filter \item -> (not-unit? item::'meta'::'has-errors') <> meta-ir) [])
+  (exit 1))
 (if (== config::'debug-output' DEBUG-OUTPUT-TYPES)
-  (println meta-ir::1))
-
-(type-check meta-ir::0 meta-ir::1)
+  (println meta-ir))
 
 (let gen-asm TARGETS::(do config::'target'))
-(let asm (gen-asm meta-ir::0 (not config::'libc')))
+(let asm (gen-asm meta-ir (not config::'libc')))
 (if (== config::'debug-output' DEBUG-OUTPUT-ASM)
   (print asm))
 

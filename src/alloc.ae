@@ -8,19 +8,35 @@
         (ret true))))
   (== collide true))
 
-(let get-var-loc \lifetime meta regs param-regs reg-lifetimes ->
-  (let reg
-    (for reg in regs
-      (let name reg::'name')
+(let get-var-loc \lifetime type meta regs param-regs reg-lifetimes ->
+  (let reg-index
+    (for i in (gen-range 0 (len regs::type))
+      (let name regs::type::i::'name')
       (if (unit? reg-lifetimes::name)
-        (ret name)
+        (ret i)
        else
         (if (not (lifetimes-collide? reg-lifetimes::name lifetime))
-          (ret name)))))
+          (ret i)))))
 
-  (match reg
-    unit => { 'name': 'bruh' 'in-reg': false }
-    ...  => { 'name': reg    'in-reg': true }))
+  (match reg-index
+    unit => { 'name': 'bruh' 'index': unit }
+    ...  => { 'name': regs::type::reg-index::'name' 'index': reg-index }))
+
+(let set-var-loc \meta name regs param-regs ->
+  (let lifetime {
+    'begin': meta::0::'vars'::name::'begin'
+    'end': meta::0::'vars'::name::'end'
+  })
+  (let type meta::0::'vars'::name::'type'::'type')
+  (let loc (get-var-loc lifetime type meta::0::'vars' regs param-regs meta::1))
+  (set meta::0::'vars'::name::'loc' loc::'name')
+  (set meta::0::'vars'::name::'loc-index' loc::'index')
+  (if (not-unit? loc::'index')
+    (if (unit? meta::1::(do loc::'name'))
+      (set meta::1::(do loc::'name') [lifetime])
+     else
+      (set meta::1::(do loc::'name') (after meta::1::(do loc::'name') lifetime))))
+  meta)
 
 (let alloc-regs \meta regs param-regs ->
   (let list
@@ -38,24 +54,14 @@
   (fold
     \meta var-indexed ->
       (let name var-indexed::0::'name')
+      (let type meta::0::'vars'::name::'type'::'type')
       (match meta::0::'vars'::name::'param-index'
-        unit =>
-          (do
-            (let lifetime {
-              'begin': meta::0::'vars'::name::'begin'
-              'end': meta::0::'vars'::name::'end'
-            })
-            (let loc (get-var-loc lifetime meta::0::'vars' regs param-regs meta::1))
-            (set meta::0::'vars'::name::'loc' loc::'name')
-            (if loc::'in-reg'
-              (if (unit? meta::1::(do loc::'name'))
-                (set meta::1::(do loc::'name') [lifetime])
-               else
-                (set meta::1::(do loc::'name') (after meta::1::(do loc::'name') lifetime)))))
+        unit => (set-var-loc meta name regs param-regs)
         ...  =>
-          (set
-            meta::0::'vars'::name::'loc'
-            param-regs::(do meta::0::'vars'::name::'param-index')))
-      meta <>
+          (do
+            (set
+              meta::0::'vars'::name::'loc'
+              param-regs::type::(do meta::0::'vars'::name::'param-index'))
+            meta)) <>
     [meta {}]
     indexed)::0)
