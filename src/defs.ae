@@ -36,6 +36,7 @@
 (let TT-COLON      (count))
 (let TT-STRING     (count))
 (let TT-ARROW      (count))
+(let TT-AMPERSAND  (count))
 
 (let INSTR-RETURN      (count 0))
 (let INSTR-ASSIGN      (count))

@@ -58,12 +58,19 @@
 (let reverse \list ->
   (sort \item -> true <> list))
 
+(let get-arg-type-type \arg meta ->
+  (match arg::'type'
+    ARG-INT    => TYPE-S32
+    ARG-STRING => TYPE-PTR
+    ARG-VAR    =>
+      meta::'vars'::(do arg::'value')::'type'::'type'))
+
 (let proc-params-gen-asm-linux-x86_64-fasm \params meta ir ->
   (map
     \param-indexed ->
       (let param param-indexed::0)
       (let index param-indexed::1)
-      (let type param::'type')
+      (let type (get-arg-type-type param meta))
       (join [
         '  mov '
         (if (< index (len LINUX-x86_64-FASM-PROC-PARAM-REGS::type))

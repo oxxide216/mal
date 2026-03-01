@@ -220,9 +220,15 @@
   ]))
 
 (let parse-type \->
-  (parse-node 'type' [
-    (parse-select [
+  (parse-select [
+    (parse-node 'type' [
       (name-token TT-IDENT 'type')
+    ])
+    (parse-node 'type' [
+      (name-token TT-AMPERSAND 'type')
+      (parse-node 'value' [
+        \parser -> ((parse-type) parser)
+      ])
     ])
   ]))
 

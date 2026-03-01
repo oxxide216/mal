@@ -55,9 +55,10 @@
   (if (unit? callee)
     (let signature (join (map type-to-str gen::'arg-types') ', ') )
     (error 'Procedure ' instr::'func' '(' signature ') was not defined before usage')
-    (set gen::'meta'::'has-errors' true))
-  (set gen::'meta'::'called-procs' (after gen::'meta'::'called-procs' callee))
-  (set gen::'return-type' callee::'return-type')
+    (set gen::'meta'::'has-errors' true)
+   else
+    (set gen::'meta'::'called-procs' (after gen::'meta'::'called-procs' callee))
+    (set gen::'return-type' callee::'return-type'))
   gen)
 
 (let gen-meta-arg \gen arg index ->

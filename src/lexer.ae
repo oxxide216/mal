@@ -139,12 +139,13 @@
     (lex-while
       is-ident-part)))
 
-(let lex-oparen (lex-lit '('))
-(let lex-cparen (lex-lit ')'))
-(let lex-assign (lex-lit '='))
-(let lex-comma  (lex-lit ','))
-(let lex-colon  (lex-lit ':'))
-(let lex-arrow  (lex-lit '->'))
+(let lex-oparen    (lex-lit '('))
+(let lex-cparen    (lex-lit ')'))
+(let lex-assign    (lex-lit '='))
+(let lex-comma     (lex-lit ','))
+(let lex-colon     (lex-lit ':'))
+(let lex-arrow     (lex-lit '->'))
+(let lex-ampersand (lex-lit '&'))
 
 (let lex-grammar [
   (new-grammar lex-whitespace TT-WHITESPACE)
@@ -162,6 +163,7 @@
   (new-grammar lex-comma      TT-COMMA)
   (new-grammar lex-colon      TT-COLON)
   (new-grammar lex-arrow      TT-ARROW)
+  (new-grammar lex-ampersand  TT-AMPERSAND)
 ])
 
 (let lexx \lexer ->

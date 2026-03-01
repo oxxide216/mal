@@ -4,7 +4,7 @@
   (match node::'type'
     '&'   => {
       'type': TYPE-PTR
-      'value': (gen-ir-type node::'value')
+      'value': (gen-ir-type node::'value'::'type')
     }
     ... => {
       'type': TYPES-MAP::(do node::'type')
