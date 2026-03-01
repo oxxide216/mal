@@ -33,16 +33,9 @@
   (set lexer::'pos' (+ lexer::'pos' 1))
   [lexer char])
 
-(let lex-eat \lexer token ->
-  {
-    'code': lexer::'code'
-    'tokens': (+ lexer::'tokens' token)
-    'pos': (+ lexer::'pos' (len token))
-  })
-
 (let lex-while \cond ->
   \lexer ->
-    (let current (! (lex-next lexer)))
+    (let current (? (lex-next lexer)))
     (if (cond current::1)
       (let next ((lex-while cond) current::0))
       (if (unit? next)
@@ -50,11 +43,11 @@
        else
         [next::0 (+ current::1 next::1)])
      else
-      unit))
+      [lexer '']))
 
 (let lex-then \cond then ->
   \lexer ->
-    (let current (! (lex-next lexer)))
+    (let current (? (lex-next lexer)))
     (if (cond current::1)
       (let next (then current::0))
       (if (unit? next)
@@ -66,7 +59,7 @@
 
 (let lex-if \cond ->
   \lexer ->
-    (let current (! (lex-next lexer)))
+    (let current (? (lex-next lexer)))
     (if (cond current::1)
       current
      else
@@ -76,7 +69,7 @@
   \lexer ->
     (if (== lit '')
       (ret [lexer '']))
-    (let current (! (lex-next lexer)))
+    (let current (? (lex-next lexer)))
     (if (== current::1 lit::0)
       (let next (? ((lex-lit (get-range lit 1 (len lit))) current::0)))
       [next::0 (+ current::1 next::1)]
@@ -90,6 +83,13 @@
     (let next (? ((head list) lexer)))
     (let nnext (? ((lex-seq (tail list)) next::0)))
     [nnext::0 (+ next::1 nnext::1)])
+
+(let lex-opt \lex ->
+  \lexer ->
+    (let next (lex lexer))
+    (if (unit? next)
+      (ret [lexer '']))
+    next)
 
 (let WHITESPACES [' ' '\t' '\n' '\r'])
 
@@ -126,11 +126,22 @@
 (let lex-comma  (lex-lit ','))
 (let lex-colon  (lex-lit ':'))
 
+(let lex-string-internal
+  (lex-seq [
+    (lex-while
+      \char -> (and (!= char '"') (!= char '\\')))
+    (lex-opt
+      (lex-then
+        \char -> (== char '\\') <>
+        (lex-then
+          \char -> true <>
+          \lexer -> (lex-string-internal lexer))))
+  ]))
+
 (let lex-string
   (lex-seq [
     (lex-lit '"')
-    (lex-while
-      \char -> (!= char '"'))
+    lex-string-internal
     (lex-lit '"')
   ]))
 
