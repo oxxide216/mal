@@ -23,6 +23,7 @@
   'debug-output': unit
   'libc': false
   'temp-dir': '/tmp'
+  'link-args': []
 })
 
 (let print-usage \->
@@ -89,7 +90,12 @@
               'temp-dir'
               args::1))
     ... =>
-      (do
+      (if (or (begins-with (head args) '-l') (begins-with (head args) '-L'))
+        (let parsed-args (parse-args (from args 2)))
+        (with parsed-args
+              'link-args'
+              (after parsed-args::'link-args' (head args)))
+       else
         (if (begins-with (head args) '-')
           (error 'Unknown flag: ' (head args))
           (exit 1))

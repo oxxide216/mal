@@ -46,7 +46,7 @@
 (let obj-path (join [config::'temp-dir' '/' temp-base-name '.o'] ''))
 (let asm-cmd (join ['fasm' asm-path obj-path] ' '))
 (let linker (if config::'libc' 'cc' else 'ld'))
-(let link-cmd (join [linker '-o' config::'output-path' obj-path] ' '))
+(let link-cmd (join (+ [linker '-o' config::'output-path' obj-path] config::'link-args') ' '))
 
 (write-file asm-path asm)
 (run-command asm-cmd)
