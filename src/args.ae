@@ -29,7 +29,11 @@
 (let print-usage \->
   (print 'Usage: mal [FLAGS]... [FILE]\n\n'
          '  -h --help                 show this message.\n'
-         '  -o [FILE]                 output assembly into [FILE].\n')
+         '  -o [FILE]                 output [FILE].\n'
+         '  --target [TARGET]         output assembly for [TARGET].\n'
+         '  --debug [TYPE]            output debug information of [TYPE].\n'
+         '  --libc                    link with libc.\n'
+         '  --temp [DIR]              output temporary files into [DIR].\n')
   (exit 0))
 
 (let parse-args \args ->
@@ -78,7 +82,7 @@
               'debug-output'
               new-mode))
     '--libc' =>
-      (with (parse-args (from args 2))
+      (with (parse-args (from args 1))
             'libc'
             true)
     '--temp' =>
@@ -91,7 +95,7 @@
               args::1))
     ... =>
       (if (or (begins-with (head args) '-l') (begins-with (head args) '-L'))
-        (let parsed-args (parse-args (from args 2)))
+        (let parsed-args (parse-args (from args 1)))
         (with parsed-args
               'link-args'
               (after parsed-args::'link-args' (head args)))
