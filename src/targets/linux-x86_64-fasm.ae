@@ -22,6 +22,15 @@
 (let LINUX-x86_64-FASM-ASM-BEGIN-DATA
   'section \'.data\'\n')
 
+(let TYPE-CONVERT-INSTR-MAP-LINUX-X86_64-FASM {
+  TYPE-S16: '  cwd\n'
+  TYPE-S32: '  cdq\n'
+  TYPE-S64: '  cqo\n'
+  TYPE-U16: '  cwd\n'
+  TYPE-U32: '  cdq\n'
+  TYPE-U64: '  cqo\n'
+})
+
 (let init-proc-gen-linux-x86_64-fasm \meta ir ->
   {
     'ir': ir
@@ -39,6 +48,11 @@
         (to-str meta::'str-ids'::(do arg::'value'))
       ] '')
     ARG-VAR    => meta::'vars'::(do arg::'value')::'loc'))
+
+(let is-on-stack \arg meta ->
+  (match arg::'type'
+    ARG-VAR => (unit? meta::'vars'::(do arg::'value')::'loc-index')
+    ...     => false))
 
 (let return-gen-asm-linux-x86_64-fasm \instr meta ->
   (let end (if instr::'last' '' else '  ret\n'))
@@ -144,24 +158,87 @@
    else
     (+ '  ' (+ code '\n'))))
 
+(let get-jump-instr-linux-x86_64-fasm \cond not is-signed ->
+  (match [cond not is-signed]
+    [OP-EQ false false] => 'je'
+    [OP-EQ true  false] => 'jne'
+    [OP-NE false false] => 'jne'
+    [OP-NE true  false] => 'je'
+    [OP-LS false false] => 'jb'
+    [OP-LS true  false] => 'jae'
+    [OP-LE false false] => 'jbe'
+    [OP-LE true  false] => 'ja'
+    [OP-GT false false] => 'ja'
+    [OP-GT true  false] => 'jbe'
+    [OP-GE false false] => 'jae'
+    [OP-GE true  false] => 'jb'
+    [OP-EQ false true]  => 'je'
+    [OP-EQ true  true]  => 'jne'
+    [OP-NE false true]  => 'jne'
+    [OP-NE true  true]  => 'je'
+    [OP-LS false true]  => 'jl'
+    [OP-LS true  true]  => 'jge'
+    [OP-LE false true]  => 'jle'
+    [OP-LE true  true]  => 'jg'
+    [OP-GT false true]  => 'jg'
+    [OP-GT true  true]  => 'jle'
+    [OP-GE false true]  => 'jge'
+    [OP-GE true  true]  => 'jl'))
+
+(let is-signed-type? \type ->
+  (contains? [
+    TYPE-S8
+    TYPE-S16
+    TYPE-S32
+    TYPE-S64] type::'type'))
+
+(let is-signed? \arg meta ->
+  (match arg::'type'
+    ARG-INT    => true
+    ARG-STRING => false
+    ARG-VAR    =>
+      (do
+        (let var meta::'vars'::(do arg::'value'))
+        (is-signed-type? var::'type'))))
+
 (let cond-jump-gen-asm-linux-x86_64-fasm \instr gen not ->
-  (let arg (arg-gen-asm-linux-x86_64-fasm instr::'args'::0 gen::'meta'))
-  (let is-imm (== instr::'args'::0::'type' ARG-INT))
+  (let lhs (arg-gen-asm-linux-x86_64-fasm instr::'args'::0 gen::'meta'))
+  (let rhs (arg-gen-asm-linux-x86_64-fasm instr::'args'::1 gen::'meta'))
+  (let all-stacks
+    (and (is-on-stack instr::'args'::0 gen::'meta')
+         (is-on-stack instr::'args'::1 gen::'meta')))
+  (let all-imms
+    (and (!= instr::'args'::0::'type' ARG-VAR)
+         (!= instr::'args'::1::'type' ARG-VAR)))
+
+  (let real-lhs
+    (if all-stacks
+      (let lhs-var gen::'meta'::'vars'::(do instr::'args'::0::'value'))
+      LINUX-x86_64-FASM-RETURN-REG::(do lhs-var::'type'::'type')
+     elif all-imms
+      'rax'
+     else
+      lhs))
+
   (let mov
-    (if is-imm
-      (join [
-        '  mov rax,'
-        instr::'args'::0::'value'
-        '\n'
-      ] '')
+    (if (or all-stacks all-imms)
+      (join ['  mov ' real-lhs ',' lhs '\n'] '')
      else
       ''))
 
   (join [
     mov
     '  cmp '
-    (if is-imm 'rax' else arg)
-    (if not ',0\njne ' else ',0\nje ')
+    real-lhs
+    ','
+    rhs
+    '\n  '
+    (get-jump-instr-linux-x86_64-fasm
+      instr::'cond'
+      not
+      (or (is-signed? instr::'args'::0 gen::'meta')
+          (is-signed? instr::'args'::1 gen::'meta')))
+    ' '
     instr::'target'
     '\n'
   ] ''))
@@ -175,10 +252,123 @@
 
 (let label-gen-asm-linux-x86_64-fasm \instr ->
   (join [
-    ' '
     instr::'name'
     ':\n'
   ] ''))
+
+(let gen-op-locs-linux-x86_64-fasm \dest-var lhs rhs meta
+                                    force-dest-return
+                                    force-rhs-loc ->
+  (let dest-stack (unit? dest-var::'loc-index'))
+  (let rhs-to-temp (and force-rhs-loc (!= rhs::'type' ARG-VAR)))
+
+  (let dest-loc
+    (if (or force-dest-return dest-stack)
+      LINUX-x86_64-FASM-RETURN-REG::(do dest-var::'type'::'type')
+     else
+      dest-var::'loc'))
+  (let lhs-loc (arg-gen-asm-linux-x86_64-fasm lhs meta))
+  (let rhs-loc (arg-gen-asm-linux-x86_64-fasm rhs meta))
+  (let new-rhs-loc
+    (if rhs-to-temp
+      LINUX-x86_64-FASM-SCRATCH-REG::(do dest-var::'type'::'type')
+     else
+      rhs-loc))
+
+  (let begin-guard0
+    (if (!= dest-loc lhs-loc)
+      (join ['  mov ' dest-loc ',' lhs-loc '\n'] '')
+     else
+      ''))
+
+  (let begin-guard1
+    (if rhs-to-temp
+      (join ['  mov ' new-rhs-loc ',' rhs-loc '\n'] '')
+     else
+      ''))
+
+  (let end-guard
+    (if (or force-dest-return dest-stack)
+      (join ['  mov ' dest-var::'loc' ',' dest-loc '\n'] '')
+     else
+      ''))
+
+  {
+    'dest': dest-loc
+    'lhs': lhs-loc
+    'rhs': new-rhs-loc
+    'begin-guard': (+ begin-guard0 begin-guard1)
+    'end-guard': end-guard
+  })
+
+(let op-add-gen-asm-linux-x86_64-fasm \dest-var lhs rhs meta ->
+  (let locs (gen-op-locs-linux-x86_64-fasm dest-var lhs rhs meta false false))
+  (join [locs::'begin-guard'
+         '  add ' locs::'dest' ',' locs::'rhs' '\n'
+         locs::'end-guard'] ''))
+
+(let op-sub-gen-asm-linux-x86_64-fasm \dest-var lhs rhs meta ->
+  (let locs (gen-op-locs-linux-x86_64-fasm dest-var lhs rhs meta false false))
+  (join [locs::'begin-guard'
+         '  sub ' locs::'dest' ',' locs::'rhs' '\n'
+         locs::'end-guard'] ''))
+
+(let op-mul-gen-asm-linux-x86_64-fasm \dest-var lhs rhs meta ->
+  (let locs (gen-op-locs-linux-x86_64-fasm dest-var lhs rhs meta true true))
+  (if (is-signed-type? dest-var::'type')
+    (join [locs::'begin-guard'
+           '  imul ' locs::'rhs' '\n'
+           locs::'end-guard'] '')
+   else
+    (join [locs::'begin-guard'
+           '  mul ' locs::'rhs' '\n'
+           locs::'end-guard'] '')))
+
+(let op-div-gen-asm-linux-x86_64-fasm \dest-var lhs rhs meta ->
+  (let locs (gen-op-locs-linux-x86_64-fasm dest-var lhs rhs meta true true))
+  (let convert TYPE-CONVERT-INSTR-MAP-LINUX-X86_64-FASM::(do dest-var::'type'::'type'))
+  (let convert-instr (if (unit? convert) '' else convert))
+  (if (is-signed-type? dest-var::'type')
+    (join [locs::'begin-guard'
+           convert-instr
+           '  idiv ' locs::'rhs' '\n'
+           locs::'end-guard'] '')
+   else
+    (join [locs::'begin-guard'
+           convert-instr
+           '  div ' locs::'rhs' '\n'
+           locs::'end-guard'] '')))
+
+(let op-mod-gen-asm-linux-x86_64-fasm \dest-var lhs rhs meta ->
+  (let locs (gen-op-locs-linux-x86_64-fasm dest-var lhs rhs meta true true))
+  (let remainder LINUX-x86_64-FASM-REMAINDER-REG::(do dest-var::'type'::'type'))
+  (let convert TYPE-CONVERT-INSTR-MAP-LINUX-X86_64-FASM::(do dest-var::'type'::'type'))
+  (let convert-instr (if (unit? convert) '' else convert))
+  (if (is-signed-type? dest-var::'type')
+    (join [locs::'begin-guard'
+           convert-instr
+           '  idiv ' locs::'rhs' '\n'
+           '  mov ' dest-var::'loc' ',' remainder '\n'] '')
+   else
+    (join [locs::'begin-guard'
+           convert-instr
+           '  div ' locs::'rhs' '\n'
+           '  mov ' dest-var::'loc' ',' remainder '\n'] '')))
+
+(let op-gen-asm-linux-x86_64-fasm \instr meta ->
+  (let dest-var meta::'vars'::(do instr::'dest'))
+  (let dest-type dest-var::'type')
+  (let dest-loc dest-var::'loc')
+  (let lhs instr::'args'::0)
+  (let lhs-loc (arg-gen-asm-linux-x86_64-fasm instr::'args'::0 meta))
+  (let rhs instr::'args'::1)
+  (let rhs-loc (arg-gen-asm-linux-x86_64-fasm instr::'args'::1 meta))
+  (match instr::'op'
+    OP-ADD => (op-add-gen-asm-linux-x86_64-fasm dest-var lhs rhs meta)
+    OP-SUB => (op-sub-gen-asm-linux-x86_64-fasm dest-var lhs rhs meta)
+    OP-MUL => (op-mul-gen-asm-linux-x86_64-fasm dest-var lhs rhs meta)
+    OP-DIV => (op-div-gen-asm-linux-x86_64-fasm dest-var lhs rhs meta)
+    OP-MOD => (op-mod-gen-asm-linux-x86_64-fasm dest-var lhs rhs meta)))
 
 (let instr-gen-asm-linux-x86_64-fasm \instr gen-asm ->
   (let gen gen-asm::0)
@@ -193,6 +383,7 @@
       INSTR-COND-NOT-JUMP => (cond-jump-gen-asm-linux-x86_64-fasm instr gen true)
       INSTR-JUMP          => (jump-gen-asm-linux-x86_64-fasm instr gen)
       INSTR-LABEL         => (label-gen-asm-linux-x86_64-fasm instr)
+      INSTR-OP            => (op-gen-asm-linux-x86_64-fasm instr gen::'meta')
       ...                 =>
         (do
           (error 'Unknown instr type: ' instr::'type')

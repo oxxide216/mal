@@ -174,17 +174,50 @@
   \parser -> ((func args) parser))
 
 (let parse-expr \->
-  (parse-node 'expr' [
+  (parse-select [
+    (parse-node 'int' [
+      (name-token TT-INT 'value')
+    ])
+    (parse-node 'str' [
+      (name-token TT-STRING 'value')
+    ])
+    (parse-node 'var' [
+      (name-token TT-IDENT 'name')
+    ])
+  ]))
+
+(let parse-bin-expr \->
+  (parse-node 'bin-expr' [
+    (parse-node 'lhs' [
+      (parse-expr)
+    ])
     (parse-select [
-      (parse-node 'int' [
-        (name-token TT-INT 'value')
-      ])
-      (parse-node 'str' [
-        (name-token TT-STRING 'value')
-      ])
-      (parse-node 'var' [
-        (name-token TT-IDENT 'name')
-      ])
+      (name-token TT-PLUS 'type')
+      (name-token TT-MINUS 'type')
+      (name-token TT-STAR 'type')
+      (name-token TT-SLASH 'type')
+      (name-token TT-PERC 'type')
+    ])
+    (parse-node 'rhs' [
+      (parse-expr)
+    ])
+  ]))
+
+(let parse-bool-expr \->
+  (parse-node 'bool-expr' [
+    (parse-node 'lhs' [
+      (parse-expr)
+    ])
+    (parse-select [
+      (name-token TT-EQ 'type')
+      (name-token TT-NE 'type')
+      (name-token TT-LS 'type')
+      (name-token TT-LE 'type')
+      (name-token TT-GT 'type')
+      (name-token TT-GE 'type')
+    ])
+    (parse-node 'rhs' [
+      (parse-expr)
     ])
   ]))
 
@@ -192,7 +225,9 @@
   (parse-select [
     (parse-node 'return' [
       (skip-token TT-RETVAL)
-      (parse-expr)
+      (parse-node 'expr' [
+        (parse-expr)
+      ])
     ])
     (parse-node 'call-assign' [
       (name-token TT-IDENT 'var-name')
@@ -201,20 +236,31 @@
       (skip-token TT-OPAREN)
       (parse-list-sep 'args'
         (skip-token TT-COMMA)
-        (parse-expr))
+        (parse-node 'arg' [
+          (parse-expr)
+        ]))
       (skip-token TT-CPAREN)
+    ])
+    (parse-node 'assign-op' [
+      (name-token TT-IDENT 'var-name')
+      (skip-token TT-ASSIGN)
+      (parse-bin-expr)
     ])
     (parse-node 'assign' [
       (name-token TT-IDENT 'var-name')
       (skip-token TT-ASSIGN)
-      (parse-expr)
+      (parse-node 'expr' [
+        (parse-expr)
+      ])
     ])
     (parse-node 'call' [
       (name-token TT-IDENT 'func-name')
       (skip-token TT-OPAREN)
       (parse-list-sep 'args'
         (skip-token TT-COMMA)
-        (parse-expr))
+        (parse-node 'arg' [
+          (parse-expr)
+        ]))
       (skip-token TT-CPAREN)
     ])
     (parse-node 'inline-asm' [
@@ -223,7 +269,7 @@
     (parse-node 'if' [
       (skip-token TT-IF)
       (parse-node 'cond' [
-        (parse-expr)
+        (parse-bool-expr)
       ])
       (parse-list 'body'
         (rec parse-statement))
@@ -231,7 +277,7 @@
         (parse-node 'elif' [
           (skip-token TT-ELIF)
           (parse-node 'cond' [
-            (parse-expr)
+            (parse-bool-expr)
           ])
           (parse-list 'body'
             (rec parse-statement))
@@ -242,6 +288,15 @@
           (parse-list 'body'
             (rec parse-statement))
         ]))
+      (skip-token TT-END)
+    ])
+    (parse-node 'while' [
+      (skip-token TT-WHILE)
+      (parse-node 'cond' [
+        (parse-bool-expr)
+      ])
+      (parse-list 'body'
+        (rec parse-statement))
       (skip-token TT-END)
     ])
   ]))

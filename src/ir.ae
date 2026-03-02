@@ -11,20 +11,24 @@
       'value': unit
     }))
 
-(let gen-ir-arg \arg ->
+(let gen-ir-arg \expr ->
   (match true
-    (not-unit? arg::'int') => {
+    (not-unit? expr::'int') => {
       'type': ARG-INT
-      'value': arg::'int'::'value'
+      'value': expr::'int'::'value'
     }
-    (not-unit? arg::'str') => {
+    (not-unit? expr::'str') => {
       'type': ARG-STRING
-      'value': arg::'str'::'value'
+      'value': expr::'str'::'value'
     }
-    (not-unit? arg::'var') => {
+    (not-unit? expr::'var') => {
       'type': ARG-VAR
-      'value': arg::'var'::'name'
-    }))
+      'value': expr::'var'::'name'
+    }
+    ...                     =>
+      (do
+        (error 'Unknown expression type: ' expr)
+        (exit 1))))
 
 (let gen-ir-elifs \elifs end-label last labels ->
   (if (== elifs [])
@@ -51,8 +55,10 @@
       {
         'type': INSTR-COND-JUMP
         'target': label
+        'cond': AST-OP-MAP::(do (head elifs)::'cond'::'bool-expr'::'type')
         'args': [
-          (gen-ir-arg (head elifs)::'cond'::'expr')
+          (gen-ir-arg (head elifs)::'cond'::'bool-expr'::'lhs')
+          (gen-ir-arg (head elifs)::'cond'::'bool-expr'::'rhs')
         ]
         'last': false
       }
@@ -90,6 +96,18 @@
           'dest': instr::'var-name'
           'args': [
             (gen-ir-arg instr::'expr')
+          ]
+          'last': last
+        }
+      ]
+      'assign-op' => [
+        {
+          'type': INSTR-OP
+          'dest': instr::'var-name'
+          'op': AST-OP-MAP::(do instr::'bin-expr'::'type')
+          'args': [
+            (gen-ir-arg instr::'bin-expr'::'lhs')
+            (gen-ir-arg instr::'bin-expr'::'rhs')
           ]
           'last': last
         }
@@ -150,8 +168,10 @@
               {
                 'type': INSTR-COND-JUMP
                 'target': label
+                'cond': AST-OP-MAP::(do instr::'cond'::'bool-expr'::'type')
                 'args': [
-                  (gen-ir-arg instr::'cond'::'expr')
+                  (gen-ir-arg instr::'cond'::'bool-expr'::'lhs')
+                  (gen-ir-arg instr::'cond'::'bool-expr'::'rhs')
                 ]
                 'last': false
               }
@@ -189,6 +209,49 @@
                   'args': []
                   'last': last
                 }))))
+      'while' =>
+        (do
+          (let begin-label (+ '.l' (to-str labels)))
+          (let end-label (+ '.l' (to-str (+ labels 1))))
+          (let body-with-labels
+              (gen-ir-instrs instr::'body' last (+ labels 2)))
+          (set labels body-with-labels::1)
+
+          (+
+            [
+              {
+                'type': INSTR-LABEL
+                'name': begin-label
+                'args': []
+                'last': last
+              }
+              {
+                'type': INSTR-COND-NOT-JUMP
+                'target': end-label
+                'cond': AST-OP-MAP::(do instr::'cond'::'bool-expr'::'type')
+                'args': [
+                  (gen-ir-arg instr::'cond'::'bool-expr'::'lhs')
+                  (gen-ir-arg instr::'cond'::'bool-expr'::'rhs')
+                ]
+                'last': false
+              }
+            ]
+            (+
+              body-with-labels::0
+              [
+                {
+                  'type': INSTR-JUMP
+                  'target': begin-label
+                  'args': []
+                  'last': false
+                }
+                {
+                  'type': INSTR-LABEL
+                  'name': end-label
+                  'args': []
+                  'last': last
+                }
+              ])))
       ... =>
         (do
           (error 'Unknown AST tag: `' instr::'tag' '`')
@@ -246,7 +309,7 @@
     ... =>
       (do
         (let result (gen-ir-instr instrs::0 false labels))
-        (let rec (gen-ir-instrs (from instrs 1) last labels))
+        (let rec (gen-ir-instrs (from instrs 1) last result::1))
         [(+ result::0 rec::0) rec::1])))
 
 (let gen-ir-items \items ->

@@ -135,6 +135,7 @@
 (let lex-eef    (lex-lit 'if'))
 (let lex-else   (lex-lit 'else'))
 (let lex-elif   (lex-lit 'elif'))
+(let lex-whail  (lex-lit 'while'))
 
 (let lex-ident
   (lex-then
@@ -149,6 +150,17 @@
 (let lex-colon     (lex-lit ':'))
 (let lex-arrow     (lex-lit '->'))
 (let lex-ampersand (lex-lit '&'))
+(let lex-plus      (lex-lit '+'))
+(let lex-minus     (lex-lit '-'))
+(let lex-star      (lex-lit '*'))
+(let lex-slash     (lex-lit '/'))
+(let lex-perc      (lex-lit '%'))
+(let lex-eq        (lex-lit '=='))
+(let lex-ne        (lex-lit '!='))
+(let lex-ls        (lex-lit '<'))
+(let lex-le        (lex-lit '<='))
+(let lex-gt        (lex-lit '>'))
+(let lex-ge        (lex-lit '>='))
 
 (let lex-grammar [
   (new-grammar lex-whitespace TT-WHITESPACE)
@@ -162,6 +174,7 @@
   (new-grammar lex-eef        TT-IF)
   (new-grammar lex-else       TT-ELSE)
   (new-grammar lex-elif       TT-ELIF)
+  (new-grammar lex-whail      TT-WHILE)
   (new-grammar lex-ident      TT-IDENT)
   (new-grammar lex-oparen     TT-OPAREN)
   (new-grammar lex-cparen     TT-CPAREN)
@@ -170,6 +183,17 @@
   (new-grammar lex-colon      TT-COLON)
   (new-grammar lex-arrow      TT-ARROW)
   (new-grammar lex-ampersand  TT-AMPERSAND)
+  (new-grammar lex-plus       TT-PLUS)
+  (new-grammar lex-minus      TT-MINUS)
+  (new-grammar lex-star       TT-STAR)
+  (new-grammar lex-slash      TT-SLASH)
+  (new-grammar lex-perc       TT-PERC)
+  (new-grammar lex-eq         TT-EQ)
+  (new-grammar lex-ne         TT-NE)
+  (new-grammar lex-ls         TT-LS)
+  (new-grammar lex-le         TT-LE)
+  (new-grammar lex-gt         TT-GT)
+  (new-grammar lex-ge         TT-GE)
 ])
 
 (let lexx \lexer ->

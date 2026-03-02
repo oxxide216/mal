@@ -2,14 +2,22 @@ proc main() -> s32
   str0 = "Hello, World!\n"
   str1 = "Foo, Bar!\n"
   str2 = "Bazz!\n"
-  if 0
+  if 0 != 0
     print(str0, 14)
-  elif 1
+  elif 1 == 1
     print(str2, 6)
   else
     print(str1, 10)
   end
-  retval 0
+  i = 0
+  while i < 10
+    print("In a loop!\n", 11)
+    i = i + 1
+  end
+  a = 5
+  b = 2
+  c = a % b
+  retval c
 end
 
 proc var() -> s32

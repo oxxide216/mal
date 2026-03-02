@@ -1,5 +1,5 @@
 (let LINUX-x86_64-FASM-GENERAL-REGS-INT64 [
-  { 'name': 'rbx' 'saved': true }  ; callee-saved
+  ;{ 'name': 'rbx' 'saved': true }  ; callee-saved
   ;{ 'name': 'r10' 'saved': false } ; not callee-saved
   ;{ 'name': 'r11' 'saved': false } ; not callee-saved
   { 'name': 'r12' 'saved': true }  ; callee-saved
@@ -9,7 +9,7 @@
 ])
 
 (let LINUX-x86_64-FASM-GENERAL-REGS-INT32 [
-  { 'name': 'ebx' 'saved': true }  ; callee-saved
+  ;{ 'name': 'ebx' 'saved': true }  ; callee-saved
   ;{ 'name': 'r10d' 'saved': false } ; not callee-saved
   ;{ 'name': 'r11d' 'saved': false } ; not callee-saved
   { 'name': 'r12d' 'saved': true }  ; callee-saved
@@ -19,7 +19,7 @@
 ])
 
 (let LINUX-x86_64-FASM-GENERAL-REGS-INT16 [
-  { 'name': 'bx' 'saved': true }  ; callee-saved
+  ;{ 'name': 'bx' 'saved': true }  ; callee-saved
   ;{ 'name': 'r10w' 'saved': false } ; not callee-saved
   ;{ 'name': 'r11w' 'saved': false } ; not callee-saved
   { 'name': 'r12w' 'saved': true }  ; callee-saved
@@ -29,7 +29,7 @@
 ])
 
 (let LINUX-x86_64-FASM-GENERAL-REGS-INT8 [
-  { 'name': 'bl' 'saved': true }  ; callee-saved
+  ;{ 'name': 'bl' 'saved': true }  ; callee-saved
   ;{ 'name': 'r10b' 'saved': false } ; not callee-saved
   ;{ 'name': 'r11b' 'saved': false } ; not callee-saved
   { 'name': 'r12b' 'saved': true }  ; callee-saved
@@ -111,4 +111,30 @@
   TYPE-U32:  'eax'
   TYPE-U64:  'rax'
   TYPE-PTR:  'rax'
+})
+
+(let LINUX-x86_64-FASM-SCRATCH-REG {
+  TYPE-UNIT: 'bl'
+  TYPE-S8:   'bl'
+  TYPE-S16:  'bx'
+  TYPE-S32:  'ebx'
+  TYPE-S64:  'rbx'
+  TYPE-U8:   'bl'
+  TYPE-U16:  'bx'
+  TYPE-U32:  'ebx'
+  TYPE-U64:  'rbx'
+  TYPE-PTR:  'rbx'
+})
+
+(let LINUX-x86_64-FASM-REMAINDER-REG {
+  TYPE-UNIT: 'ah'
+  TYPE-S8:   'ah'
+  TYPE-S16:  'dx'
+  TYPE-S32:  'edx'
+  TYPE-S64:  'rdx'
+  TYPE-U8:   'ah'
+  TYPE-U16:  'dx'
+  TYPE-U32:  'edx'
+  TYPE-U64:  'rdx'
+  TYPE-PTR:  'rdx'
 })

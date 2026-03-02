@@ -31,6 +31,7 @@
 (let TT-IF         (count))
 (let TT-ELSE       (count))
 (let TT-ELIF       (count))
+(let TT-WHILE      (count))
 (let TT-IDENT      (count))
 (let TT-OPAREN     (count))
 (let TT-CPAREN     (count))
@@ -40,6 +41,17 @@
 (let TT-STRING     (count))
 (let TT-ARROW      (count))
 (let TT-AMPERSAND  (count))
+(let TT-PLUS       (count))
+(let TT-MINUS      (count))
+(let TT-STAR       (count))
+(let TT-SLASH      (count))
+(let TT-PERC       (count))
+(let TT-EQ         (count))
+(let TT-NE         (count))
+(let TT-LS         (count))
+(let TT-LE         (count))
+(let TT-GT         (count))
+(let TT-GE         (count))
 
 (let INSTR-RETURN        (count 0))
 (let INSTR-ASSIGN        (count))
@@ -50,6 +62,7 @@
 (let INSTR-COND-NOT-JUMP (count))
 (let INSTR-JUMP          (count))
 (let INSTR-LABEL         (count))
+(let INSTR-OP            (count))
 
 (let ITEM-PROC-DEF         (count 0))
 (let ITEM-EXTERN-PROC-DECL (count))
@@ -101,3 +114,29 @@
     TYPE-U8  => TYPE-U16
     TYPE-U32 => TYPE-U64
     ...      => type))
+
+(let OP-ADD (count 0))
+(let OP-SUB (count))
+(let OP-MUL (count))
+(let OP-DIV (count))
+(let OP-MOD (count))
+(let OP-EQ  (count))
+(let OP-NE  (count))
+(let OP-LS  (count))
+(let OP-LE  (count))
+(let OP-GT  (count))
+(let OP-GE  (count))
+
+(let AST-OP-MAP {
+  '+': OP-ADD
+  '-': OP-SUB
+  '*': OP-MUL
+  '/': OP-DIV
+  '%': OP-MOD
+  '==':  OP-EQ
+  '!=':  OP-NE
+  '<':  OP-LS
+  '<=':  OP-LE
+  '>':  OP-GT
+  '>=':  OP-GE
+})

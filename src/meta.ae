@@ -122,6 +122,16 @@
           'end': index
           'param-index': unit
         })
+    INSTR-OP          =>
+      (set
+        gen::'meta'::'vars'::(do instr::'dest')
+        {
+          'type': gen::'arg-types'::0
+          'uses': 0
+          'begin': index
+          'end': index
+          'param-index': unit
+        })
     INSTR-CALL        =>
       (set gen (gen-meta-call gen instr))
     INSTR-CALL-ASSIGN =>
