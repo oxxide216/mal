@@ -8,6 +8,7 @@
 (use 'ir')
 (use 'meta')
 (use 'targets')
+(use '../scripts/link')
 
 (let config (parse-args (from (get-args) 1)))
 
@@ -46,14 +47,35 @@
 (let temp-base-name (to-str (hash code)))
 (let asm-path (join [config::'temp-dir' '/' temp-base-name '.s'] ''))
 (let obj-path (join [config::'temp-dir' '/' temp-base-name '.o'] ''))
+(let link-path (join [config::'temp-dir' 'link.ld'] '/'))
 (let asm-cmd (join ['fasm' asm-path obj-path] ' '))
-(let linker (if config::'libc' 'cc' else 'ld'))
-(let link-cmd (join (+ [linker '-o' config::'output-path' obj-path] config::'link-args') ' '))
+(let link-cmd
+  (if config::'libc'
+    (join
+      (+ [
+        'cc'
+        '-o'
+        config::'output-path'
+        obj-path
+      ] config::'link-args') ' ')
+   else
+    (join
+      (+ [
+        'ld'
+        '-s'
+        '-T'
+        link-path
+        '-o'
+        config::'output-path'
+        obj-path
+      ] config::'link-args') ' ')))
 
 (write-file asm-path asm)
 (let asm-result (run-command asm-cmd))
 (if (!= asm-result 0)
   (exit 1))
+
+(write-file link-path link-script)
 (let link-result (run-command link-cmd))
 (if (!= link-result 0)
   (exit 1))
