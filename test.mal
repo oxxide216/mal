@@ -1,8 +1,10 @@
 proc main() -> s32
   str0 = "Hello, World!\n"
-  str1 = "Foooo, Baaar!\n"
+  str1 = "Foo, Bar!\n"
   if 1
-    print_14_bytes(str0)
+    print(str0, 14)
+  else
+    print(str1, 10)
   end
   retval 0
 end
@@ -15,8 +17,8 @@ proc var() -> s32
   retval b
 end
 
-proc print_14_bytes(bytes: &u8)
-  "mov rdx,14"
+proc print(bytes: &u8, size: s32)
+  "mov rdx,rsi"
   "mov rsi,rdi"
   "mov rdi,1"
   "mov rax,1"

@@ -76,27 +76,61 @@
       'if' =>
         (do
           (let label (+ '.l' (to-str labels)))
-          (let body-with-labels (gen-ir-instrs instr::'body' (+ labels 1)))
+          (let body-with-labels (gen-ir-instrs instr::'body' last (+ labels 1)))
           (set labels body-with-labels::1)
-          (before
-            {
-              'type': INSTR-COND-JUMP
-              'code': instr::'code'
-              'target': label
-              'args': [
-                (gen-ir-arg instr::'cond'::'expr')
-              ]
-              'last': false
-            }
-            (after
-              body-with-labels::0
+          (let body
+            (match instr::'else'
+              unit => body-with-labels::0
+              ...  =>
+                (after
+                  body-with-labels::0
+                  {
+                    'type': INSTR-JUMP
+                    'code': instr::'code'
+                    'target': (+ '.l' (to-str labels))
+                    'args': []
+                    'last': false
+                  })))
+
+          (let eef
+            (before
               {
-                'type': INSTR-LABEL
+                'type': INSTR-COND-JUMP
                 'code': instr::'code'
-                'name': label
-                'args': []
-                'last': last
-              })))
+                'target': label
+                'args': [
+                  (gen-ir-arg instr::'cond'::'expr')
+                ]
+                'last': false
+              }
+              (after
+                body
+                {
+                  'type': INSTR-LABEL
+                  'code': instr::'code'
+                  'name': label
+                  'args': []
+                  'last': last
+                })))
+
+          (if (unit? instr::'else')
+            eef
+           else
+            (let label (+ '.l' (to-str labels)))
+            (let body-with-labels
+              (gen-ir-instrs instr::'else'::'body' last (+ labels 1)))
+            (set labels body-with-labels::1)
+            (+
+              eef
+              (after
+                body-with-labels::0
+                {
+                  'type': INSTR-LABEL
+                  'code': instr::'code'
+                  'name': label
+                  'args': []
+                  'last': last
+                }))))
       ... =>
         (do
           (error 'Unknown AST tag: `' instr::'tag' '`')
@@ -125,7 +159,7 @@
           (match instr::'return'
             unit => { 'type': TYPE-UNIT }
             ...  => (gen-ir-type instr::'return'::'type'))
-        'body': (gen-ir-instrs instr::'body' 0)::0
+        'body': (gen-ir-instrs instr::'body' true 0)::0
       }
     ]
     'extern-proc-decl' => [
@@ -147,14 +181,14 @@
       }
     ]))
 
-(let gen-ir-instrs \instrs labels ->
+(let gen-ir-instrs \instrs last labels ->
   (match (len instrs)
     0   => []
-    1   => (gen-ir-instr instrs::0 true labels)
+    1   => (gen-ir-instr instrs::0 last labels)
     ... =>
       (do
         (let result (gen-ir-instr instrs::0 false labels))
-        (let rec (gen-ir-instrs (from instrs 1) labels))
+        (let rec (gen-ir-instrs (from instrs 1) last labels))
         [(+ result::0 rec::0) rec::1])))
 
 (let gen-ir-items \items ->

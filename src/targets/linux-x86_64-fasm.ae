@@ -144,7 +144,7 @@
    else
     (+ '  ' (+ code '\n'))))
 
-(let jump-gen-asm-linux-x86_64-fasm \instr gen type ->
+(let cond-jump-gen-asm-linux-x86_64-fasm \instr gen not ->
   (let arg (arg-gen-asm-linux-x86_64-fasm instr::'args'::0 gen::'meta'))
   (let is-imm (== instr::'args'::0::'type' ARG-INT))
   (let mov
@@ -161,9 +161,14 @@
     mov
     '  cmp '
     (if is-imm 'rax' else arg)
-    ',0\n'
-    JUMP-TYPES-MAP::type
-    ' '
+    (if not ',0\njne ' else ',0\nje ')
+    instr::'target'
+    '\n'
+  ] ''))
+
+(let jump-gen-asm-linux-x86_64-fasm \instr gen ->
+  (join [
+    '  jmp '
     instr::'target'
     '\n'
   ] ''))
@@ -184,8 +189,9 @@
       INSTR-CALL          => (call-gen-asm-linux-x86_64-fasm instr gen::'meta')
       INSTR-CALL-ASSIGN   => (call-assign-gen-asm-linux-x86_64-fasm instr gen::'meta')
       INSTR-INLINE-ASM    => (inline-asm-gen-asm-linux-x86_64-fasm instr)
-      INSTR-COND-JUMP     => (jump-gen-asm-linux-x86_64-fasm instr gen JUMP-EQ)
-      INSTR-COND-NOT-JUMP => (jump-gen-asm-linux-x86_64-fasm instr gen JUMP-NEQ)
+      INSTR-COND-JUMP     => (cond-jump-gen-asm-linux-x86_64-fasm instr gen false)
+      INSTR-COND-NOT-JUMP => (cond-jump-gen-asm-linux-x86_64-fasm instr gen true)
+      INSTR-JUMP          => (jump-gen-asm-linux-x86_64-fasm instr gen)
       INSTR-LABEL         => (label-gen-asm-linux-x86_64-fasm instr)
       ...                 =>
         (do

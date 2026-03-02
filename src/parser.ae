@@ -227,6 +227,12 @@
       ])
       (parse-list 'body'
         (rec parse-statement))
+      (parse-opt
+        (parse-node 'else' [
+          (skip-token TT-ELSE)
+          (parse-list 'body'
+            (rec parse-statement))
+        ]))
       (skip-token TT-END)
     ])
   ]))
