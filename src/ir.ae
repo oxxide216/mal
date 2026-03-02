@@ -26,6 +26,52 @@
       'value': arg::'var'::'name'
     }))
 
+(let gen-ir-elifs \elifs end-label last labels ->
+  (if (== elifs [])
+    (ret [[] labels]))
+
+  (let label (+ '.l' (to-str labels)))
+  (let body-with-labels (gen-ir-instrs (head elifs)::'body' last (+ labels 1)))
+  (set labels body-with-labels::1)
+  (let body
+    (match (and (== elifs []) (unit? end-label))
+      true  => body-with-labels::0
+      false =>
+        (after
+          body-with-labels::0
+          {
+            'type': INSTR-JUMP
+            'target': end-label
+            'args': []
+            'last': false
+          })))
+
+  (let eleef
+    (before
+      {
+        'type': INSTR-COND-JUMP
+        'target': label
+        'args': [
+          (gen-ir-arg (head elifs)::'cond'::'expr')
+        ]
+        'last': false
+      }
+      (after
+        body
+        {
+          'type': INSTR-LABEL
+          'name': label
+          'args': []
+          'last': last
+        })))
+
+  (match elifs
+    []  => [eleef labels]
+    ... =>
+      (do
+        (let rec (gen-ir-elifs (tail elifs) end-label last labels))
+        [(+ eleef rec::0) rec::1])))
+
 (let gen-ir-instr \instr last labels ->
   (let result
     (match instr::'tag'
@@ -78,16 +124,23 @@
           (let label (+ '.l' (to-str labels)))
           (let body-with-labels (gen-ir-instrs instr::'body' last (+ labels 1)))
           (set labels body-with-labels::1)
-          (let body
+          (let end-label
             (match instr::'else'
-              unit => body-with-labels::0
+              unit => unit
               ...  =>
+                (do
+                  (let end-label (+ '.l' (to-str labels)))
+                  (set labels (+ labels 1))
+                  end-label)))
+          (let body
+            (match (and (== instr::'elifs' []) (unit? instr::'else'))
+              true  => body-with-labels::0
+              false =>
                 (after
                   body-with-labels::0
                   {
                     'type': INSTR-JUMP
-                    'code': instr::'code'
-                    'target': (+ '.l' (to-str labels))
+                    'target': end-label
                     'args': []
                     'last': false
                   })))
@@ -96,7 +149,6 @@
             (before
               {
                 'type': INSTR-COND-JUMP
-                'code': instr::'code'
                 'target': label
                 'args': [
                   (gen-ir-arg instr::'cond'::'expr')
@@ -107,27 +159,33 @@
                 body
                 {
                   'type': INSTR-LABEL
-                  'code': instr::'code'
                   'name': label
                   'args': []
                   'last': last
                 })))
 
+          (let elifs-with-labels
+            (gen-ir-elifs instr::'elifs'
+                          end-label
+                          last
+                          labels))
+          (set labels elifs-with-labels::1)
+
           (if (unit? instr::'else')
-            eef
+            (+ eef elifs-with-labels::0)
            else
             (let label (+ '.l' (to-str labels)))
             (let body-with-labels
               (gen-ir-instrs instr::'else'::'body' last (+ labels 1)))
             (set labels body-with-labels::1)
+
             (+
-              eef
+              (+ eef elifs-with-labels::0)
               (after
                 body-with-labels::0
                 {
                   'type': INSTR-LABEL
-                  'code': instr::'code'
-                  'name': label
+                  'name': end-label
                   'args': []
                   'last': last
                 }))))

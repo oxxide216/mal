@@ -1,8 +1,11 @@
 proc main() -> s32
   str0 = "Hello, World!\n"
   str1 = "Foo, Bar!\n"
-  if 1
+  str2 = "Bazz!\n"
+  if 0
     print(str0, 14)
+  elif 1
+    print(str2, 6)
   else
     print(str1, 10)
   end

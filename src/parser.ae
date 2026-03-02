@@ -227,6 +227,15 @@
       ])
       (parse-list 'body'
         (rec parse-statement))
+      (parse-list 'elifs'
+        (parse-node 'elif' [
+          (skip-token TT-ELIF)
+          (parse-node 'cond' [
+            (parse-expr)
+          ])
+          (parse-list 'body'
+            (rec parse-statement))
+        ]))
       (parse-opt
         (parse-node 'else' [
           (skip-token TT-ELSE)

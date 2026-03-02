@@ -30,6 +30,7 @@
 (let TT-EXTERN     (count))
 (let TT-IF         (count))
 (let TT-ELSE       (count))
+(let TT-ELIF       (count))
 (let TT-IDENT      (count))
 (let TT-OPAREN     (count))
 (let TT-CPAREN     (count))

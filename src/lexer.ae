@@ -134,6 +134,7 @@
 (let lex-extern (lex-lit 'extern'))
 (let lex-eef    (lex-lit 'if'))
 (let lex-else   (lex-lit 'else'))
+(let lex-elif   (lex-lit 'elif'))
 
 (let lex-ident
   (lex-then
@@ -160,6 +161,7 @@
   (new-grammar lex-extern     TT-EXTERN)
   (new-grammar lex-eef        TT-IF)
   (new-grammar lex-else       TT-ELSE)
+  (new-grammar lex-elif       TT-ELIF)
   (new-grammar lex-ident      TT-IDENT)
   (new-grammar lex-oparen     TT-OPAREN)
   (new-grammar lex-cparen     TT-CPAREN)
