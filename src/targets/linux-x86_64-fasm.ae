@@ -22,6 +22,13 @@
 (let LINUX-x86_64-FASM-ASM-BEGIN-DATA
   'section \'.data\'\n')
 
+(let init-proc-gen-linux-x86_64-fasm \meta ir ->
+  {
+    'ir': ir
+    'meta': meta
+    'ifs': []
+  })
+
 (let arg-gen-asm-linux-x86_64-fasm \arg meta ->
   (match arg::'type'
     ARG-INT    => arg::'value'
@@ -39,7 +46,8 @@
     unit => end
     ...  =>
       (do
-        (let return-loc LINUX-x86_64-FASM-RETURN-REG::(do meta::'return-type'::'type'))
+        (let return-loc
+          LINUX-x86_64-FASM-RETURN-REG::(do meta::'return-type'::'type'))
         (let loc (arg-gen-asm-linux-x86_64-fasm instr::'args'::0 meta))
         (if (== loc return-loc)
           end
@@ -76,7 +84,7 @@
     ARG-VAR    =>
       meta::'vars'::(do arg::'value')::'type'::'type'))
 
-(let proc-params-gen-asm-linux-x86_64-fasm \params meta ir ->
+(let proc-params-gen-asm-linux-x86_64-fasm \params meta ->
   (map
     \param-indexed ->
       (let param param-indexed::0)
@@ -104,19 +112,19 @@
             ','
             (arg-gen-asm-linux-x86_64-fasm param meta)
             '\n'
-          ] '')) <>
-    (reverse (zip params (gen-range 0 (len params))))))
+        ] '')) <>
+  (reverse (zip params (gen-range 0 (len params))))))
 
-(let call-gen-asm-linux-x86_64-fasm \instr meta ir ->
+(let call-gen-asm-linux-x86_64-fasm \instr meta ->
   (join
-    (+ (proc-params-gen-asm-linux-x86_64-fasm instr::'args' meta ir)
+    (+ (proc-params-gen-asm-linux-x86_64-fasm instr::'args' meta)
        ['  call ' instr::'func' '\n'])
     ''))
 
-(let call-assign-gen-asm-linux-x86_64-fasm \instr meta ir ->
+(let call-assign-gen-asm-linux-x86_64-fasm \instr meta ->
   (let dest-var meta::'vars'::(do instr::'dest'))
   (join
-    (+ (proc-params-gen-asm-linux-x86_64-fasm instr::'args' meta ir)
+    (+ (proc-params-gen-asm-linux-x86_64-fasm instr::'args' meta)
        [
          '  call '
          instr::'func'
@@ -129,20 +137,62 @@
        ])
     ''))
 
-(let inline-asm-gen-asm-linux-x86_64-fasm \instr meta ->
+(let inline-asm-gen-asm-linux-x86_64-fasm \instr ->
   (let code (get-range instr::'code' 1 (- (len instr::'code') 1)))
   (if (begins-with instr::'code' '"  ')
     (+ code '\n')
    else
     (+ '  ' (+ code '\n'))))
 
-(let instr-gen-asm-linux-x86_64-fasm \instr meta ir ->
-  (match instr::'type'
-    INSTR-RETURN      => (return-gen-asm-linux-x86_64-fasm instr meta)
-    INSTR-ASSIGN      => (assign-gen-asm-linux-x86_64-fasm instr meta)
-    INSTR-CALL        => (call-gen-asm-linux-x86_64-fasm instr meta ir)
-    INSTR-CALL-ASSIGN => (call-assign-gen-asm-linux-x86_64-fasm instr meta ir)
-    INSTR-INLINE-ASM  => (inline-asm-gen-asm-linux-x86_64-fasm instr meta)))
+(let jump-gen-asm-linux-x86_64-fasm \instr gen type ->
+  (let arg (arg-gen-asm-linux-x86_64-fasm instr::'args'::0 gen::'meta'))
+  (let is-imm (== instr::'args'::0::'type' ARG-INT))
+  (let mov
+    (if is-imm
+      (join [
+        '  mov rax,'
+        instr::'args'::0::'value'
+        '\n'
+      ] '')
+     else
+      ''))
+
+  (join [
+    mov
+    '  cmp '
+    (if is-imm 'rax' else arg)
+    ',0\n'
+    JUMP-TYPES-MAP::type
+    ' '
+    instr::'target'
+    '\n'
+  ] ''))
+
+(let label-gen-asm-linux-x86_64-fasm \instr ->
+  (join [
+    ' '
+    instr::'name'
+    ':\n'
+  ] ''))
+
+(let instr-gen-asm-linux-x86_64-fasm \instr gen-asm ->
+  (let gen gen-asm::0)
+  (let asm
+    (match instr::'type'
+      INSTR-RETURN        => (return-gen-asm-linux-x86_64-fasm instr gen::'meta')
+      INSTR-ASSIGN        => (assign-gen-asm-linux-x86_64-fasm instr gen::'meta')
+      INSTR-CALL          => (call-gen-asm-linux-x86_64-fasm instr gen::'meta')
+      INSTR-CALL-ASSIGN   => (call-assign-gen-asm-linux-x86_64-fasm instr gen::'meta')
+      INSTR-INLINE-ASM    => (inline-asm-gen-asm-linux-x86_64-fasm instr)
+      INSTR-COND-JUMP     => (jump-gen-asm-linux-x86_64-fasm instr gen JUMP-EQ)
+      INSTR-COND-NOT-JUMP => (jump-gen-asm-linux-x86_64-fasm instr gen JUMP-NEQ)
+      INSTR-LABEL         => (label-gen-asm-linux-x86_64-fasm instr)
+      ...                 =>
+        (do
+          (error 'Unknown instr type: ' instr::'type')
+          (set gen::'has-errors' true)
+          '')))
+  [gen (after gen-asm::1 asm)])
 
 (let proc-segment-var-gen-asm-linux-x86_64-fasm \loc is-param is-end ->
   (match is-param
@@ -150,6 +200,8 @@
     false => (join [(if is-end '  pop ' else '  push ') loc '\n'] '')))
 
 (let proc-gen-asm-linux-x86_64-fasm \proc ir ->
+  (let gen (init-proc-gen-linux-x86_64-fasm proc::'meta' ir))
+
   (let vars-list
     (map
       \entry ->
@@ -196,9 +248,10 @@
         ]
         begin-asm)))
 
-  (let body-asm
-    (map
-      \instr -> (instr-gen-asm-linux-x86_64-fasm instr proc::'meta' ir) <>
+  (let gen-body-asm
+    (fold
+      \gen-asm instr -> (instr-gen-asm-linux-x86_64-fasm instr gen-asm) <>
+      [gen []]
       proc::'body'))
 
   (let end-asm
@@ -221,9 +274,12 @@
           '  leave\n'
         ])))
 
+  (if gen-body-asm::0::'has-errors'
+    (exit 1))
+
   (join
     (+ ['public ' proc::'name' '\n' proc::'name' ':\n']
-       (after (+ actual-begin-asm (+ body-asm actual-end-asm)) '  ret\n'))
+       (after (+ actual-begin-asm (+ gen-body-asm::1 actual-end-asm)) '  ret\n'))
     ''))
 
 (let extern-proc-gen-asm-linux-x86_64-fasm \proc ->

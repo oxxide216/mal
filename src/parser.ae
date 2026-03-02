@@ -170,6 +170,9 @@
 
     first)
 
+(macro rec \func ...args ->
+  \parser -> ((func args) parser))
+
 (let parse-expr \->
   (parse-node 'expr' [
     (parse-select [
@@ -216,6 +219,15 @@
     ])
     (parse-node 'inline-asm' [
       (name-token TT-STRING 'code')
+    ])
+    (parse-node 'if' [
+      (skip-token TT-IF)
+      (parse-node 'cond' [
+        (parse-expr)
+      ])
+      (parse-list 'body'
+        (rec parse-statement))
+      (skip-token TT-END)
     ])
   ]))
 

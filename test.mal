@@ -1,13 +1,10 @@
 proc main() -> s32
-  one()
-  str = "Hello, World!\n"
-  result = args(2, 2)
-  print_14_bytes(str)
-  retval result
-end
-
-proc one() -> s32
-  retval 1
+  str0 = "Hello, World!\n"
+  str1 = "Foooo, Baaar!\n"
+  if 1
+    print_14_bytes(str0)
+  end
+  retval 0
 end
 
 proc var() -> s32
@@ -16,10 +13,6 @@ proc var() -> s32
   b = a
   d = c
   retval b
-end
-
-proc args(a: s32, b: s32) -> s32
-  retval a
 end
 
 proc print_14_bytes(bytes: &u8)

@@ -26,56 +26,86 @@
       'value': arg::'var'::'name'
     }))
 
-(let gen-ir-instr \instr last ->
-  (match instr::'tag'
-    'return' => [
-      {
-        'type': INSTR-RETURN
-        'args': [
-          (gen-ir-arg instr::'expr')
-        ]
+(let gen-ir-instr \instr last labels ->
+  (let result
+    (match instr::'tag'
+      'return' => [
+        {
+          'type': INSTR-RETURN
+          'args': [
+            (gen-ir-arg instr::'expr')
+          ]
+          'last': last
+        }
+      ]
+      'assign' => [
+        {
+          'type': INSTR-ASSIGN
+          'dest': instr::'var-name'
+          'args': [
+            (gen-ir-arg instr::'expr')
+          ]
+          'last': last
+        }
+      ]
+      'call' => [
+        {
+          'type': INSTR-CALL
+          'func': instr::'func-name'
+          'args': (map gen-ir-arg instr::'args')
+          'last': last
+        }
+      ]
+      'call-assign' => [
+        {
+          'type': INSTR-CALL-ASSIGN
+          'dest': instr::'var-name'
+          'func': instr::'func-name'
+          'args': (map gen-ir-arg instr::'args')
         'last': last
-      }
-    ]
-    'assign' => [
-      {
-        'type': INSTR-ASSIGN
-        'dest': instr::'var-name'
-        'args': [
-          (gen-ir-arg instr::'expr')
-        ]
-        'last': last
-      }
-    ]
-    'call' => [
-      {
-        'type': INSTR-CALL
-        'func': instr::'func-name'
-        'args': (map gen-ir-arg instr::'args')
-        'last': last
-      }
-    ]
-    'call-assign' => [
-      {
-        'type': INSTR-CALL-ASSIGN
-        'dest': instr::'var-name'
-        'func': instr::'func-name'
-        'args': (map gen-ir-arg instr::'args')
-        'last': last
-      }
-    ]
-    'inline-asm' => [
-      {
-        'type': INSTR-INLINE-ASM
-        'code': instr::'code'
-        'args': []
-        'last': last
-      }
-    ]
-    ... =>
-      (do
-        (error 'Unknown AST tag: `' instr::'tag' '`')
-        (exit 1))))
+        }
+      ]
+      'inline-asm' => [
+        {
+          'type': INSTR-INLINE-ASM
+          'code': instr::'code'
+          'args': []
+          'last': last
+        }
+      ]
+      'if' =>
+        (do
+          (let label (+ '.l' (to-str labels)))
+          (let body-with-labels (gen-ir-instrs instr::'body' (+ labels 1)))
+          (set labels body-with-labels::1)
+          (before
+            {
+              'type': INSTR-COND-JUMP
+              'code': instr::'code'
+              'target': label
+              'args': [
+                (gen-ir-arg instr::'cond'::'expr')
+              ]
+              'last': false
+            }
+            (after
+              body-with-labels::0
+              {
+                'type': INSTR-LABEL
+                'code': instr::'code'
+                'name': label
+                'args': []
+                'last': last
+              })))
+      ... =>
+        (do
+          (error 'Unknown AST tag: `' instr::'tag' '`')
+          (exit 1))))
+
+  (if (== instr::'tag' 'if')
+    [result (+ labels 1)]
+   else
+    [result labels]))
 
 (let gen-ir-item \instr last ->
   (match instr::'tag'
@@ -95,7 +125,7 @@
           (match instr::'return'
             unit => { 'type': TYPE-UNIT }
             ...  => (gen-ir-type instr::'return'::'type'))
-        'body': (gen-ir-items instr::'body' gen-ir-instr)
+        'body': (gen-ir-instrs instr::'body' 0)::0
       }
     ]
     'extern-proc-decl' => [
@@ -117,11 +147,21 @@
       }
     ]))
 
-(let gen-ir-items \items gen-func ->
+(let gen-ir-instrs \instrs labels ->
+  (match (len instrs)
+    0   => []
+    1   => (gen-ir-instr instrs::0 true labels)
+    ... =>
+      (do
+        (let result (gen-ir-instr instrs::0 false labels))
+        (let rec (gen-ir-instrs (from instrs 1) labels))
+        [(+ result::0 rec::0) rec::1])))
+
+(let gen-ir-items \items ->
   (match (len items)
     0   => []
-    1   => (gen-func items::0 true)
-    ... => (+ (gen-func items::0 false) (gen-ir-items (from items 1) gen-func))))
+    1   => (gen-ir-item items::0 true)
+    ... => (+ (gen-ir-item items::0 false) (gen-ir-items (from items 1)))))
 
 (let gen-ir \program ->
-  (gen-ir-items program::'items' gen-ir-item))
+  (gen-ir-items program::'items'))

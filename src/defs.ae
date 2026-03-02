@@ -28,6 +28,7 @@
 (let TT-PROC       (count))
 (let TT-END        (count))
 (let TT-EXTERN     (count))
+(let TT-IF         (count))
 (let TT-IDENT      (count))
 (let TT-OPAREN     (count))
 (let TT-CPAREN     (count))
@@ -38,11 +39,14 @@
 (let TT-ARROW      (count))
 (let TT-AMPERSAND  (count))
 
-(let INSTR-RETURN      (count 0))
-(let INSTR-ASSIGN      (count))
-(let INSTR-CALL        (count))
-(let INSTR-CALL-ASSIGN (count))
-(let INSTR-INLINE-ASM  (count))
+(let INSTR-RETURN        (count 0))
+(let INSTR-ASSIGN        (count))
+(let INSTR-CALL          (count))
+(let INSTR-CALL-ASSIGN   (count))
+(let INSTR-INLINE-ASM    (count))
+(let INSTR-COND-JUMP     (count))
+(let INSTR-COND-NOT-JUMP (count))
+(let INSTR-LABEL         (count))
 
 (let ITEM-PROC-DEF         (count 0))
 (let ITEM-EXTERN-PROC-DECL (count))
@@ -94,3 +98,11 @@
     TYPE-U8  => TYPE-U16
     TYPE-U32 => TYPE-U64
     ...      => type))
+
+(let JUMP-EQ  (count 0))
+(let JUMP-NEQ (count))
+
+(let JUMP-TYPES-MAP {
+  JUMP-EQ:  'je'
+  JUMP-NEQ: 'jne'
+})
