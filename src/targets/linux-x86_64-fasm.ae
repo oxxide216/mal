@@ -415,7 +415,7 @@
 
 (let op-deref-gen-asm-linux-x86_64-fasm \dest-var rhs meta ->
   (let rhs-loc (arg-gen-asm-linux-x86_64-fasm rhs meta))
-  (let scratch LINUX-x86_64-FASM-SCRATCH-REG::(do dest-var::'type'::'type'))
+  (let scratch LINUX-x86_64-FASM-SCRATCH-REG::TYPE-PTR)
   (let ptr-prefix (get-ptr-prefix-linux-x86_64-fasm dest-var::'type'::'type'))
   [
     (if (is-on-stack? rhs meta)

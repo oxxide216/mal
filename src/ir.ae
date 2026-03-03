@@ -336,7 +336,7 @@
 
 (let gen-ir-instrs \instrs last labels ->
   (match (len instrs)
-    0   => []
+    0   => [[] labels]
     1   => (gen-ir-instr instrs::0 last labels)
     ... =>
       (do
