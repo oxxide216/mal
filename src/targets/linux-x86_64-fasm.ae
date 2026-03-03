@@ -494,9 +494,9 @@
             ...  =>
               LINUX-x86_64-FASM-GENERAL-REGS::type::loc-index::'name'))))
 
-  (match dest-var::'type'::'type'
-    TYPE-PTR => (join ['  lea ' dest-var::'loc' ',[' rhs-loc ']\n'] '')
-    ...      => (join [ '  mov ' dest-var::'loc' ',' rhs-loc '\n'] '')))
+  (match [dest-var::'type'::'type' (== rhs::'type' ARG-VAR)]
+    [TYPE-PTR true] => (join ['  lea ' dest-var::'loc' ',[' rhs-loc ']\n'] '')
+    ...             => (join [ '  mov ' dest-var::'loc' ',' rhs-loc '\n'] '')))
 
 (let instr-gen-asm-linux-x86_64-fasm \instr gen-asm ->
   (let gen gen-asm::0)
