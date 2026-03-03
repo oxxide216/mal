@@ -24,7 +24,7 @@
           (ret i)))))
 
   (match reg-index
-    unit => { 'name': (get-stack-loc stack-size) 'index': unit }
+    unit => { 'name': (get-stack-loc type stack-size) 'index': unit }
     ...  => { 'name': regs::type::reg-index::'name' 'index': reg-index }))
 
 (let set-var-loc \meta name regs param-regs get-stack-loc ->
