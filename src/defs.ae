@@ -108,6 +108,7 @@
   TYPE-U16:  2
   TYPE-U32:  4
   TYPE-U64:  8
+  TYPE-PTR:  8
 })
 
 ; Binary operations
