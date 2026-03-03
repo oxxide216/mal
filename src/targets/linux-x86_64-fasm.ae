@@ -105,28 +105,29 @@
       (let param param-indexed::0)
       (let index param-indexed::1)
       (let type (get-arg-type-type param meta))
-      (match type
-        TYPE-PTR =>
-          (join [
-            '  lea '
-            (if (< index (len LINUX-x86_64-FASM-PROC-PARAM-REGS::type))
+      (if (< index (len LINUX-x86_64-FASM-PROC-PARAM-REGS::type))
+        (match type
+          TYPE-PTR =>
+            (join [
+              '  lea '
               LINUX-x86_64-FASM-PROC-PARAM-REGS::type::index
-             else
-              'bruh')
-            ',['
-            (arg-gen-asm-linux-x86_64-fasm param meta)
-            ']\n'
-          ] '')
-        ...      =>
-          (join [
-            '  mov '
-            (if (< index (len LINUX-x86_64-FASM-PROC-PARAM-REGS::type))
+              ',['
+              (arg-gen-asm-linux-x86_64-fasm param meta)
+              ']\n'
+            ] '')
+          ...      =>
+            (join [
+              '  mov '
               LINUX-x86_64-FASM-PROC-PARAM-REGS::type::index
-             else
-              'bruh')
-            ','
-            (arg-gen-asm-linux-x86_64-fasm param meta)
-            '\n'
+              ','
+              (arg-gen-asm-linux-x86_64-fasm param meta)
+              '\n'
+          ] ''))
+       else
+        (join [
+          '  push '
+          (arg-gen-asm-linux-x86_64-fasm param meta)
+          '\n'
         ] '')) <>
   (reverse (zip params (gen-range 0 (len params))))))
 
