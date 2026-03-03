@@ -71,8 +71,8 @@
 
 (let assign-gen-asm-linux-x86_64-fasm \instr meta ->
   (let dest-var meta::'vars'::(do instr::'dest'))
-  (match dest-var::'type'::'type'
-    TYPE-PTR =>
+  (match instr::'args'::0::'type'
+    ARG-STRING =>
       (join [
         '  lea '
         dest-var::'loc'
@@ -106,8 +106,8 @@
       (let index param-indexed::1)
       (let type (get-arg-type-type param meta))
       (if (< index (len LINUX-x86_64-FASM-PROC-PARAM-REGS::type))
-        (match type
-          TYPE-PTR =>
+        (match param::'type'
+          ARG-STRING =>
             (join [
               '  lea '
               LINUX-x86_64-FASM-PROC-PARAM-REGS::type::index
@@ -115,7 +115,7 @@
               (arg-gen-asm-linux-x86_64-fasm param meta)
               ']\n'
             ] '')
-          ...      =>
+          ...        =>
             (join [
               '  mov '
               LINUX-x86_64-FASM-PROC-PARAM-REGS::type::index
@@ -494,9 +494,9 @@
             ...  =>
               LINUX-x86_64-FASM-GENERAL-REGS::type::loc-index::'name'))))
 
-  (match [dest-var::'type'::'type' (== rhs::'type' ARG-VAR)]
-    [TYPE-PTR true] => (join ['  lea ' dest-var::'loc' ',[' rhs-loc ']\n'] '')
-    ...             => (join [ '  mov ' dest-var::'loc' ',' rhs-loc '\n'] '')))
+  (match rhs::'type'
+    ARG-STRING => (join ['  lea ' dest-var::'loc' ',[' rhs-loc ']\n'] '')
+    ...        => (join ['  mov ' dest-var::'loc' ',' rhs-loc '\n'] '')))
 
 (let instr-gen-asm-linux-x86_64-fasm \instr gen-asm ->
   (let gen gen-asm::0)
