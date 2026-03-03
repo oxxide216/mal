@@ -1,4 +1,4 @@
-proc main() -> s32
+proc main() -> u8
   str0 = "Hello, World!\n"
   str1 = "Foo, Bar!\n"
   str2 = "Bazz!\n"
@@ -19,7 +19,8 @@ proc main() -> s32
   *r = 2
   b = *r
   c = a + b
-  retval c
+  d = c as u8
+  retval d
 end
 
 proc var() -> s32

@@ -469,6 +469,34 @@
     (is-on-stack? instr::'args'::0 meta)
   ])
 
+(let cast-gen-asm-linux-x86_64-fasm \instr meta ->
+  (let dest-var meta::'vars'::(do instr::'dest'))
+  (let rhs instr::'args'::0)
+
+  (let rhs-loc
+    (match rhs::'type'
+      ARG-INT    => rhs::'value'
+      ARG-STRING =>
+        (join [
+          meta::'name'
+          '@str'
+          (to-str meta::'str-ids'::(do rhs::'value'))
+        ] '')
+      ARG-VAR    =>
+        (do
+          (let type dest-var::'type'::'type')
+          (let var meta::'vars'::(do rhs::'value'))
+          (let loc-index var::'loc-index')
+          (match loc-index
+            unit =>
+              (get-stack-loc-linux-x86_64-fasm type var::'stack-offset')
+            ...  =>
+              LINUX-x86_64-FASM-GENERAL-REGS::type::loc-index::'name'))))
+
+  (match dest-var::'type'::'type'
+    TYPE-PTR => (join ['  lea ' dest-var::'loc' ',[' rhs-loc ']\n'] '')
+    ...      => (join [ '  mov ' dest-var::'loc' ',' rhs-loc '\n'] '')))
+
 (let instr-gen-asm-linux-x86_64-fasm \instr gen-asm ->
   (let gen gen-asm::0)
   (let asm
@@ -487,7 +515,7 @@
           (let result (bin-op-gen-asm-linux-x86_64-fasm instr gen::'meta'))
           (set gen::'scratch-reg-used' result::1)
           result::0)
-      INSTR-UN-OP        =>
+      INSTR-UN-OP         =>
         (do
           (let result (un-op-gen-asm-linux-x86_64-fasm instr gen::'meta'))
           (set gen::'scratch-reg-used' result::1)
@@ -497,6 +525,7 @@
           (let result (deref-assign-gen-asm-linux-x86_64-fasm instr gen::'meta'))
           (set gen::'scratch-reg-used' result::1)
           result::0)
+      INSTR-CAST          => (cast-gen-asm-linux-x86_64-fasm instr gen::'meta')
       ...                 =>
         (do
           (error 'Unknown instr type: ' instr::'type')

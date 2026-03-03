@@ -100,6 +100,17 @@
           'last': last
         }
       ]
+      'cast' => [
+        {
+          'type': INSTR-CAST
+          'dest': instr::'var-name'
+          'dest-type': (gen-ir-type instr::'type')
+          'args': [
+            (gen-ir-arg instr::'expr')
+          ]
+          'last': last
+        }
+      ]
       'bin-op' => [
         {
           'type': INSTR-BIN-OP

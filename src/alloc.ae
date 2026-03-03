@@ -41,6 +41,7 @@
   (set meta::0::'vars'::name::'loc' loc::'name')
   (set meta::0::'vars'::name::'loc-index' loc::'index')
   (if (unit? loc::'index')
+    (set meta::0::'vars'::name::'stack-offset' meta::0::'stack-size')
     (set
       meta::0::'stack-size'
       (+ meta::0::'stack-size' TYPE-SIZE-MAP::(do var::'type'::'type')))

@@ -262,6 +262,15 @@
       (skip-token TT-ASSIGN)
       (parse-un-expr)
     ])
+    (parse-node 'cast' [
+      (name-token TT-IDENT 'var-name')
+      (skip-token TT-ASSIGN)
+      (parse-node 'expr' [
+        (parse-expr)
+      ])
+      (skip-token TT-AS)
+      (parse-type)
+    ])
     (parse-node 'assign' [
       (name-token TT-IDENT 'var-name')
       (skip-token TT-ASSIGN)

@@ -210,6 +210,31 @@
             'end': index
             'param-index': unit
             'ref-target': false
+          }))
+    INSTR-CAST        =>
+      (do
+        (let can-cast
+          (can-cast?
+            gen::'arg-types'::0
+            instr::'dest-type'))
+
+        (if (unit? can-cast)
+          (error 'Cannot cast '
+                 (type-to-str gen::'arg-types'::0)
+                 ' -> '
+                 (type-to-str instr::'dest-type')
+                 '\n')
+          (set gen::'meta'::'has-errors' true))
+
+        (set
+          gen::'meta'::'vars'::(do instr::'dest')
+          {
+            'type': instr::'dest-type'
+            'uses': 0
+            'begin': index
+            'end': index
+            'param-index': unit
+            'ref-target': false
           })))
 
   gen)

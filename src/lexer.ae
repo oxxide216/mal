@@ -136,6 +136,7 @@
 (let lex-else   (lex-lit 'else'))
 (let lex-elif   (lex-lit 'elif'))
 (let lex-whail  (lex-lit 'while'))
+(let lex-as     (lex-lit 'as'))
 
 (let lex-ident
   (lex-then
@@ -175,6 +176,7 @@
   (new-grammar lex-else       TT-ELSE)
   (new-grammar lex-elif       TT-ELIF)
   (new-grammar lex-whail      TT-WHILE)
+  (new-grammar lex-as         TT-AS)
   (new-grammar lex-ident      TT-IDENT)
   (new-grammar lex-oparen     TT-OPAREN)
   (new-grammar lex-cparen     TT-CPAREN)

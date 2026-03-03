@@ -32,6 +32,7 @@
 (let TT-ELSE       (count))
 (let TT-ELIF       (count))
 (let TT-WHILE      (count))
+(let TT-AS         (count))
 (let TT-IDENT      (count))
 (let TT-OPAREN     (count))
 (let TT-CPAREN     (count))
@@ -65,6 +66,7 @@
 (let INSTR-BIN-OP        (count))
 (let INSTR-UN-OP         (count))
 (let INSTR-DEREF-ASSIGN  (count))
+(let INSTR-CAST          (count))
 
 (let ITEM-PROC-DEF         (count 0))
 (let ITEM-EXTERN-PROC-DECL (count))
@@ -155,3 +157,19 @@
     TYPE-U32  => 'u32'
     TYPE-U64  => 'u64'
     TYPE-PTR  => (+ '&' (type-to-str type::'value'))))
+
+(let is-int? \type ->
+  (contains? [
+    TYPE-S8
+    TYPE-S16
+    TYPE-S32
+    TYPE-S64
+    TYPE-U8
+    TYPE-U16
+    TYPE-U32
+    TYPE-U64
+    TYPE-PTR
+  ] type))
+
+(let can-cast? \a b ->
+  (and (is-int? a) (is-int? b)))
