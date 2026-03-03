@@ -8,7 +8,12 @@
         (ret true))))
   (== collide true))
 
-(let get-var-loc \lifetime type meta regs param-regs reg-lifetimes ->
+(let get-var-loc \lifetime type ref-target meta regs
+                  param-regs reg-lifetimes stack-size
+                  get-stack-loc ->
+  (if ref-target
+    (ret { 'name': (get-stack-loc type stack-size) 'index': unit }))
+
   (let reg-index
     (for i in (gen-range 0 (len regs::type))
       (let name regs::type::i::'name')
@@ -19,26 +24,34 @@
           (ret i)))))
 
   (match reg-index
-    unit => { 'name': 'bruh' 'index': unit }
+    unit => { 'name': (get-stack-loc stack-size) 'index': unit }
     ...  => { 'name': regs::type::reg-index::'name' 'index': reg-index }))
 
-(let set-var-loc \meta name regs param-regs ->
+(let set-var-loc \meta name regs param-regs get-stack-loc ->
+  (let var meta::0::'vars'::name)
   (let lifetime {
-    'begin': meta::0::'vars'::name::'begin'
-    'end': meta::0::'vars'::name::'end'
+    'begin': var::'begin'
+    'end': var::'end'
   })
-  (let type meta::0::'vars'::name::'type'::'type')
-  (let loc (get-var-loc lifetime type meta::0 regs param-regs meta::1))
+  (let ref-target var::'ref-target')
+  (let type var::'type'::'type')
+  (let loc (get-var-loc lifetime type ref-target meta::0
+                        regs param-regs meta::1 meta::0::'stack-size'
+                        get-stack-loc))
   (set meta::0::'vars'::name::'loc' loc::'name')
   (set meta::0::'vars'::name::'loc-index' loc::'index')
-  (if (not-unit? loc::'index')
+  (if (unit? loc::'index')
+    (set
+      meta::0::'stack-size'
+      (+ meta::0::'stack-size' TYPE-SIZE-MAP::(do var::'type'::'type')))
+   else
     (if (unit? meta::1::(do loc::'index'))
       (set meta::1::(do loc::'index') [lifetime])
      else
       (set meta::1::(do loc::'index') (after meta::1::(do loc::'index') lifetime))))
   meta)
 
-(let alloc-regs \meta regs param-regs ->
+(let alloc-regs \meta regs param-regs get-stack-loc ->
   (let list
     (map
       \entry -> (with entry::'value' 'name' entry::'key') <>
@@ -56,7 +69,7 @@
       (let name var-indexed::0::'name')
       (let type meta::0::'vars'::name::'type'::'type')
       (match meta::0::'vars'::name::'param-index'
-        unit => (set-var-loc meta name regs param-regs)
+        unit => (set-var-loc meta name regs param-regs get-stack-loc)
         ...  =>
           (do
             (set

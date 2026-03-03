@@ -55,7 +55,7 @@
       {
         'type': INSTR-COND-JUMP
         'target': label
-        'cond': AST-OP-MAP::(do (head elifs)::'cond'::'bool-expr'::'type')
+        'cond': AST-BIN-OP-MAP::(do (head elifs)::'cond'::'bool-expr'::'type')
         'args': [
           (gen-ir-arg (head elifs)::'cond'::'bool-expr'::'lhs')
           (gen-ir-arg (head elifs)::'cond'::'bool-expr'::'rhs')
@@ -100,14 +100,25 @@
           'last': last
         }
       ]
-      'assign-op' => [
+      'bin-op' => [
         {
-          'type': INSTR-OP
+          'type': INSTR-BIN-OP
           'dest': instr::'var-name'
-          'op': AST-OP-MAP::(do instr::'bin-expr'::'type')
+          'op': AST-BIN-OP-MAP::(do instr::'bin-expr'::'type')
           'args': [
             (gen-ir-arg instr::'bin-expr'::'lhs')
             (gen-ir-arg instr::'bin-expr'::'rhs')
+          ]
+          'last': last
+        }
+      ]
+      'un-op' => [
+        {
+          'type': INSTR-UN-OP
+          'dest': instr::'var-name'
+          'op': AST-UN-OP-MAP::(do instr::'un-expr'::'type')
+          'args': [
+            (gen-ir-arg instr::'un-expr'::'rhs')
           ]
           'last': last
         }
@@ -127,6 +138,16 @@
           'func': instr::'func-name'
           'args': (map gen-ir-arg instr::'args')
         'last': last
+        }
+      ]
+      'deref-assign' => [
+        {
+          'type': INSTR-DEREF-ASSIGN
+          'dest': instr::'var-name'
+          'args': [
+            (gen-ir-arg instr::'expr')
+          ]
+          'last': last
         }
       ]
       'inline-asm' => [
@@ -168,7 +189,7 @@
               {
                 'type': INSTR-COND-JUMP
                 'target': label
-                'cond': AST-OP-MAP::(do instr::'cond'::'bool-expr'::'type')
+                'cond': AST-BIN-OP-MAP::(do instr::'cond'::'bool-expr'::'type')
                 'args': [
                   (gen-ir-arg instr::'cond'::'bool-expr'::'lhs')
                   (gen-ir-arg instr::'cond'::'bool-expr'::'rhs')
@@ -228,7 +249,7 @@
               {
                 'type': INSTR-COND-NOT-JUMP
                 'target': end-label
-                'cond': AST-OP-MAP::(do instr::'cond'::'bool-expr'::'type')
+                'cond': AST-BIN-OP-MAP::(do instr::'cond'::'bool-expr'::'type')
                 'args': [
                   (gen-ir-arg instr::'cond'::'bool-expr'::'lhs')
                   (gen-ir-arg instr::'cond'::'bool-expr'::'rhs')

@@ -15,8 +15,10 @@ proc main() -> s32
     i = i + 1
   end
   a = 5
-  b = 2
-  c = a % b
+  r = &a
+  *r = 2
+  b = *r
+  c = a + b
   retval c
 end
 

@@ -62,7 +62,9 @@
 (let INSTR-COND-NOT-JUMP (count))
 (let INSTR-JUMP          (count))
 (let INSTR-LABEL         (count))
-(let INSTR-OP            (count))
+(let INSTR-BIN-OP        (count))
+(let INSTR-UN-OP         (count))
+(let INSTR-DEREF-ASSIGN  (count))
 
 (let ITEM-PROC-DEF         (count 0))
 (let ITEM-EXTERN-PROC-DECL (count))
@@ -94,6 +96,53 @@
   'u64':  TYPE-U64
 })
 
+(let TYPE-SIZE-MAP {
+  TYPE-UNIT: 0
+  TYPE-S8:   1
+  TYPE-S16:  2
+  TYPE-S32:  4
+  TYPE-S64:  8
+  TYPE-U8:   1
+  TYPE-U16:  2
+  TYPE-U32:  4
+  TYPE-U64:  8
+})
+
+; Binary operations
+(let OP-ADD   (count 0))
+(let OP-SUB   (count))
+(let OP-MUL   (count))
+(let OP-DIV   (count))
+(let OP-MOD   (count))
+(let OP-EQ    (count))
+(let OP-NE    (count))
+(let OP-LS    (count))
+(let OP-LE    (count))
+(let OP-GT    (count))
+(let OP-GE    (count))
+; Unary operations
+(let OP-REF   (count))
+(let OP-DEREF (count))
+
+(let AST-BIN-OP-MAP {
+  '+':   OP-ADD
+  '-':   OP-SUB
+  '*':   OP-MUL
+  '/':   OP-DIV
+  '%':   OP-MOD
+  '==':  OP-EQ
+  '!=':  OP-NE
+  '<':   OP-LS
+  '<=':  OP-LE
+  '>':   OP-GT
+  '>=':  OP-GE
+})
+
+(let AST-UN-OP-MAP {
+  '&':   OP-REF
+  '*':   OP-DEREF
+})
+
 (let type-to-str \type ->
   (match type::'type'
     TYPE-UNIT => 'unit'
@@ -106,37 +155,3 @@
     TYPE-U32  => 'u32'
     TYPE-U64  => 'u64'
     TYPE-PTR  => (+ '&' (type-to-str type::'value'))))
-
-(let type-to-stack \type ->
-  (match type
-    TYPE-S8  => TYPE-S16
-    TYPE-S32 => TYPE-S64
-    TYPE-U8  => TYPE-U16
-    TYPE-U32 => TYPE-U64
-    ...      => type))
-
-(let OP-ADD (count 0))
-(let OP-SUB (count))
-(let OP-MUL (count))
-(let OP-DIV (count))
-(let OP-MOD (count))
-(let OP-EQ  (count))
-(let OP-NE  (count))
-(let OP-LS  (count))
-(let OP-LE  (count))
-(let OP-GT  (count))
-(let OP-GE  (count))
-
-(let AST-OP-MAP {
-  '+': OP-ADD
-  '-': OP-SUB
-  '*': OP-MUL
-  '/': OP-DIV
-  '%': OP-MOD
-  '==':  OP-EQ
-  '!=':  OP-NE
-  '<':  OP-LS
-  '<=':  OP-LE
-  '>':  OP-GT
-  '>=':  OP-GE
-})

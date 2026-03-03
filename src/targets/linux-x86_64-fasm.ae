@@ -36,6 +36,7 @@
     'ir': ir
     'meta': meta
     'ifs': []
+    'scratch-reg-used': false
   })
 
 (let arg-gen-asm-linux-x86_64-fasm \arg meta ->
@@ -49,13 +50,13 @@
       ] '')
     ARG-VAR    => meta::'vars'::(do arg::'value')::'loc'))
 
-(let is-on-stack \arg meta ->
+(let is-on-stack? \arg meta ->
   (match arg::'type'
     ARG-VAR => (unit? meta::'vars'::(do arg::'value')::'loc-index')
     ...     => false))
 
 (let return-gen-asm-linux-x86_64-fasm \instr meta ->
-  (let end (if instr::'last' '' else '  ret\n'))
+  (let end (if instr::'last' '' else '  jmp .end\n'))
   (match instr::'args'::0
     unit => end
     ...  =>
@@ -205,8 +206,8 @@
   (let lhs (arg-gen-asm-linux-x86_64-fasm instr::'args'::0 gen::'meta'))
   (let rhs (arg-gen-asm-linux-x86_64-fasm instr::'args'::1 gen::'meta'))
   (let all-stacks
-    (and (is-on-stack instr::'args'::0 gen::'meta')
-         (is-on-stack instr::'args'::1 gen::'meta')))
+    (and (is-on-stack? instr::'args'::0 gen::'meta')
+         (is-on-stack? instr::'args'::1 gen::'meta')))
   (let all-imms
     (and (!= instr::'args'::0::'type' ARG-VAR)
          (!= instr::'args'::1::'type' ARG-VAR)))
@@ -262,11 +263,6 @@
   (let dest-stack (unit? dest-var::'loc-index'))
   (let rhs-to-temp (and force-rhs-loc (!= rhs::'type' ARG-VAR)))
 
-  (let dest-loc
-    (if (or force-dest-return dest-stack)
-      LINUX-x86_64-FASM-RETURN-REG::(do dest-var::'type'::'type')
-     else
-      dest-var::'loc'))
   (let lhs-loc (arg-gen-asm-linux-x86_64-fasm lhs meta))
   (let rhs-loc (arg-gen-asm-linux-x86_64-fasm rhs meta))
   (let new-rhs-loc
@@ -274,6 +270,12 @@
       LINUX-x86_64-FASM-SCRATCH-REG::(do dest-var::'type'::'type')
      else
       rhs-loc))
+  (let dest-loc
+    (if (or force-dest-return
+            (or dest-stack (== dest-var::'loc' rhs-loc)))
+      LINUX-x86_64-FASM-RETURN-REG::(do dest-var::'type'::'type')
+     else
+      dest-var::'loc'))
 
   (let begin-guard0
     (if (!= dest-loc lhs-loc)
@@ -288,7 +290,8 @@
       ''))
 
   (let end-guard
-    (if (or force-dest-return dest-stack)
+    (if (or force-dest-return
+            (or dest-stack (== dest-var::'loc' rhs-loc)))
       (join ['  mov ' dest-var::'loc' ',' dest-loc '\n'] '')
      else
       ''))
@@ -299,76 +302,172 @@
     'rhs': new-rhs-loc
     'begin-guard': (+ begin-guard0 begin-guard1)
     'end-guard': end-guard
+    'scratch-reg-used': rhs-to-temp
   })
 
 (let op-add-gen-asm-linux-x86_64-fasm \dest-var lhs rhs meta ->
   (let locs (gen-op-locs-linux-x86_64-fasm dest-var lhs rhs meta false false))
-  (join [locs::'begin-guard'
-         '  add ' locs::'dest' ',' locs::'rhs' '\n'
-         locs::'end-guard'] ''))
+  [
+    (join [locs::'begin-guard'
+           '  add ' locs::'dest' ',' locs::'rhs' '\n'
+           locs::'end-guard'] '')
+    locs::'scratch-reg-used'
+  ])
 
 (let op-sub-gen-asm-linux-x86_64-fasm \dest-var lhs rhs meta ->
   (let locs (gen-op-locs-linux-x86_64-fasm dest-var lhs rhs meta false false))
-  (join [locs::'begin-guard'
-         '  sub ' locs::'dest' ',' locs::'rhs' '\n'
-         locs::'end-guard'] ''))
+  [
+    (join [locs::'begin-guard'
+           '  sub ' locs::'dest' ',' locs::'rhs' '\n'
+           locs::'end-guard'] '')
+    locs::'scratch-reg-used'
+  ])
 
 (let op-mul-gen-asm-linux-x86_64-fasm \dest-var lhs rhs meta ->
   (let locs (gen-op-locs-linux-x86_64-fasm dest-var lhs rhs meta true true))
-  (if (is-signed-type? dest-var::'type')
-    (join [locs::'begin-guard'
-           '  imul ' locs::'rhs' '\n'
-           locs::'end-guard'] '')
-   else
-    (join [locs::'begin-guard'
-           '  mul ' locs::'rhs' '\n'
-           locs::'end-guard'] '')))
+  [
+    (if (is-signed-type? dest-var::'type')
+      (join [locs::'begin-guard'
+             '  imul ' locs::'rhs' '\n'
+             locs::'end-guard'] '')
+     else
+      (join [locs::'begin-guard'
+             '  mul ' locs::'rhs' '\n'
+             locs::'end-guard'] ''))
+    locs::'scratch-reg-used'
+  ])
 
 (let op-div-gen-asm-linux-x86_64-fasm \dest-var lhs rhs meta ->
   (let locs (gen-op-locs-linux-x86_64-fasm dest-var lhs rhs meta true true))
   (let convert TYPE-CONVERT-INSTR-MAP-LINUX-X86_64-FASM::(do dest-var::'type'::'type'))
   (let convert-instr (if (unit? convert) '' else convert))
-  (if (is-signed-type? dest-var::'type')
-    (join [locs::'begin-guard'
-           convert-instr
-           '  idiv ' locs::'rhs' '\n'
-           locs::'end-guard'] '')
-   else
-    (join [locs::'begin-guard'
-           convert-instr
-           '  div ' locs::'rhs' '\n'
-           locs::'end-guard'] '')))
+  [
+    (if (is-signed-type? dest-var::'type')
+      (join [locs::'begin-guard'
+             convert-instr
+             '  idiv ' locs::'rhs' '\n'
+             locs::'end-guard'] '')
+     else
+      (join [locs::'begin-guard'
+             convert-instr
+             '  div ' locs::'rhs' '\n'
+             locs::'end-guard'] ''))
+    locs::'scratch-reg-used'
+  ])
 
 (let op-mod-gen-asm-linux-x86_64-fasm \dest-var lhs rhs meta ->
   (let locs (gen-op-locs-linux-x86_64-fasm dest-var lhs rhs meta true true))
   (let remainder LINUX-x86_64-FASM-REMAINDER-REG::(do dest-var::'type'::'type'))
   (let convert TYPE-CONVERT-INSTR-MAP-LINUX-X86_64-FASM::(do dest-var::'type'::'type'))
   (let convert-instr (if (unit? convert) '' else convert))
-  (if (is-signed-type? dest-var::'type')
-    (join [locs::'begin-guard'
-           convert-instr
-           '  idiv ' locs::'rhs' '\n'
-           '  mov ' dest-var::'loc' ',' remainder '\n'] '')
-   else
-    (join [locs::'begin-guard'
-           convert-instr
-           '  div ' locs::'rhs' '\n'
-           '  mov ' dest-var::'loc' ',' remainder '\n'] '')))
+  [
+    (if (is-signed-type? dest-var::'type')
+      (join [locs::'begin-guard'
+             convert-instr
+             '  idiv ' locs::'rhs' '\n'
+             '  mov ' dest-var::'loc' ',' remainder '\n'] '')
+     else
+      (join [locs::'begin-guard'
+             convert-instr
+             '  div ' locs::'rhs' '\n'
+             '  mov ' dest-var::'loc' ',' remainder '\n'] ''))
+    locs::'scratch-reg-used'
+  ])
 
-(let op-gen-asm-linux-x86_64-fasm \instr meta ->
+(let bin-op-gen-asm-linux-x86_64-fasm \instr meta ->
   (let dest-var meta::'vars'::(do instr::'dest'))
-  (let dest-type dest-var::'type')
-  (let dest-loc dest-var::'loc')
   (let lhs instr::'args'::0)
-  (let lhs-loc (arg-gen-asm-linux-x86_64-fasm instr::'args'::0 meta))
   (let rhs instr::'args'::1)
-  (let rhs-loc (arg-gen-asm-linux-x86_64-fasm instr::'args'::1 meta))
   (match instr::'op'
     OP-ADD => (op-add-gen-asm-linux-x86_64-fasm dest-var lhs rhs meta)
     OP-SUB => (op-sub-gen-asm-linux-x86_64-fasm dest-var lhs rhs meta)
     OP-MUL => (op-mul-gen-asm-linux-x86_64-fasm dest-var lhs rhs meta)
     OP-DIV => (op-div-gen-asm-linux-x86_64-fasm dest-var lhs rhs meta)
     OP-MOD => (op-mod-gen-asm-linux-x86_64-fasm dest-var lhs rhs meta)))
+
+(let op-ref-gen-asm-linux-x86_64-fasm \dest-var rhs meta ->
+  (let rhs-loc (arg-gen-asm-linux-x86_64-fasm rhs meta))
+  (let scratch LINUX-x86_64-FASM-SCRATCH-REG::(do dest-var::'type'::'type'))
+  [
+    (if (unit? dest-var::'loc-index')
+      (join [
+        '  lea ' scratch ',' rhs-loc '\n'
+        '  mov ' dest-var::'loc' ',' scratch '\n'
+      ] '')
+     else
+      (join [
+        '  lea ' dest-var::'loc' ',' rhs-loc '\n'
+      ] ''))
+    (unit? dest-var::'loc-index')
+  ])
+
+(let get-ptr-prefix-linux-x86_64-fasm \type ->
+  (match type
+    TYPE-S8   => 'byte'
+    TYPE-S16  => 'word'
+    TYPE-S32  => 'dword'
+    TYPE-S64  => 'qword'
+    TYPE-U8   => 'byte'
+    TYPE-U16  => 'word'
+    TYPE-U32  => 'dword'
+    TYPE-U64  => 'qword'
+    TYPE-PTR  => 'qword'))
+
+(let op-deref-gen-asm-linux-x86_64-fasm \dest-var rhs meta ->
+  (let rhs-loc (arg-gen-asm-linux-x86_64-fasm rhs meta))
+  (let scratch LINUX-x86_64-FASM-SCRATCH-REG::(do dest-var::'type'::'type'))
+  (let ptr-prefix (get-ptr-prefix-linux-x86_64-fasm dest-var::'type'::'type'))
+  [
+    (if (is-on-stack? rhs meta)
+      (join [
+        '  mov ' scratch ',' rhs-loc '\n'
+        '  mov ' dest-var::'loc' ',' ptr-prefix '[' scratch ']\n'
+      ] '')
+     else
+      (join [
+        '  mov ' dest-var::'loc' ',' ptr-prefix '[' rhs-loc ']\n'
+      ] ''))
+    (is-on-stack? rhs meta)
+  ])
+
+(let un-op-gen-asm-linux-x86_64-fasm \instr meta ->
+  (let dest-var meta::'vars'::(do instr::'dest'))
+  (let rhs instr::'args'::0)
+  (match instr::'op'
+    OP-REF   => (op-ref-gen-asm-linux-x86_64-fasm dest-var rhs meta)
+    OP-DEREF => (op-deref-gen-asm-linux-x86_64-fasm dest-var rhs meta)))
+
+(let deref-assign-gen-asm-linux-x86_64-fasm \instr meta ->
+  (let dest-var meta::'vars'::(do instr::'dest'))
+  (let rhs-loc (arg-gen-asm-linux-x86_64-fasm instr::'args'::0 meta))
+  (let scratch LINUX-x86_64-FASM-SCRATCH-REG::(do dest-var::'type'::'type'))
+  (let ptr-prefix (get-ptr-prefix-linux-x86_64-fasm dest-var::'type'::'value'::'type'))
+  (let dest-on-stack (unit? dest-var::'loc-index'))
+  (let rhs-on-stack (is-on-stack? instr::'args'::0 meta))
+  [
+    (match [dest-on-stack rhs-on-stack]
+      [false false] =>
+        (join [
+          '  mov ' scratch ',' rhs-loc '\n'
+          '  mov ' ptr-prefix '[' dest-var::'loc' '],' rhs-loc '\n'
+        ] '')
+      [false true]  =>
+        (join [
+          '  mov ' scratch ',' rhs-loc '\n'
+          '  mov ' ptr-prefix '[' dest-var::'loc' '],' scratch '\n'
+        ] '')
+      [true  false] =>
+        (join [
+          '  mov rax,' dest-var::'loc' '\n'
+          '  mov ' ptr-prefix '[rax],' rhs-loc '\n'
+        ] '')
+      [true  true]  =>
+        (join [
+          '  mov rax,' dest-var::'loc' '\n'
+          '  mov ' ptr-prefix '[rax],' scratch '\n'
+        ] ''))
+    (is-on-stack? instr::'args'::0 meta)
+  ])
 
 (let instr-gen-asm-linux-x86_64-fasm \instr gen-asm ->
   (let gen gen-asm::0)
@@ -383,7 +482,21 @@
       INSTR-COND-NOT-JUMP => (cond-jump-gen-asm-linux-x86_64-fasm instr gen true)
       INSTR-JUMP          => (jump-gen-asm-linux-x86_64-fasm instr gen)
       INSTR-LABEL         => (label-gen-asm-linux-x86_64-fasm instr)
-      INSTR-OP            => (op-gen-asm-linux-x86_64-fasm instr gen::'meta')
+      INSTR-BIN-OP        =>
+        (do
+          (let result (bin-op-gen-asm-linux-x86_64-fasm instr gen::'meta'))
+          (set gen::'scratch-reg-used' result::1)
+          result::0)
+      INSTR-UN-OP        =>
+        (do
+          (let result (un-op-gen-asm-linux-x86_64-fasm instr gen::'meta'))
+          (set gen::'scratch-reg-used' result::1)
+          result::0)
+      INSTR-DEREF-ASSIGN  =>
+        (do
+          (let result (deref-assign-gen-asm-linux-x86_64-fasm instr gen::'meta'))
+          (set gen::'scratch-reg-used' result::1)
+          result::0)
       ...                 =>
         (do
           (error 'Unknown instr type: ' instr::'type')
@@ -391,7 +504,17 @@
           '')))
   [gen (after gen-asm::1 asm)])
 
-(let proc-segment-var-gen-asm-linux-x86_64-fasm \loc is-param is-end ->
+(let type-to-stack-linux-x86_64-fasm \type ->
+  (match type
+    TYPE-S8  => TYPE-S16
+    TYPE-S32 => TYPE-S64
+    TYPE-U8  => TYPE-U16
+    TYPE-U32 => TYPE-U64
+    ...      => type))
+
+(let proc-segment-var-gen-asm-linux-x86_64-fasm \loc-index type is-param is-end ->
+  (let stack-type (type-to-stack-linux-x86_64-fasm type))
+  (let loc LINUX-x86_64-FASM-GENERAL-REGS::stack-type::loc-index::'name')
   (match is-param
     true  => ''
     false => (join [(if is-end '  pop ' else '  push ') loc '\n'] '')))
@@ -399,84 +522,118 @@
 (let proc-gen-asm-linux-x86_64-fasm \proc ir ->
   (let gen (init-proc-gen-linux-x86_64-fasm proc::'meta' ir))
 
-  (let vars-list
+  (let gen-with-body-asm
+    (fold
+      \gen-asm instr -> (instr-gen-asm-linux-x86_64-fasm instr gen-asm) <>
+      [gen []]
+      proc::'body'))
+
+  (if gen-with-body-asm::0::'has-errors'
+    (exit 1))
+
+  (let stack-size proc::'meta'::'stack-size')
+
+  (let vars
     (map
       \entry ->
         {
-          'loc': entry::'value'::'loc'
           'loc-index': entry::'value'::'loc-index'
-          'type': entry::'value'::'type'
+          'type': entry::'value'::'type'::'type'
           'is-param': (not-unit? entry::'value'::'param-index')
         } <>
       proc::'meta'::'vars'))
 
-  (let non-param-vars-list
+  (let non-param-vars
     (filter
       \var -> (not var::'is-param') <>
-      vars-list))
+      vars))
 
-  (let unique-var-locs
+  (let unique-vars
     (fold
       \locs var ->
-        (let type (type-to-stack var::'type'::'type'))
-        (let loc-index var::'loc-index')
-        (let loc LINUX-x86_64-FASM-GENERAL-REGS::type::loc-index)
-        (with locs loc::'name' var::'is-param') <>
+        (match var::'loc-index'
+          unit => locs
+          ...  => (with locs var::'loc-index' var)) <>
       {}
-      non-param-vars-list))
+      non-param-vars))
 
   (let begin-asm
     (map
       \entry ->
         (proc-segment-var-gen-asm-linux-x86_64-fasm
           entry::'key'
-          entry::'value'
+          entry::'value'::'type'
+          entry::'value'::'is-param'
           false) <>
-      unique-var-locs))
+      unique-vars))
 
-  (let actual-begin-asm
-    (if (== begin-asm [])
-      begin-asm
+  (let actual-begin-asm0
+    (if gen-with-body-asm::0::'scratch-reg-used'
+      (+
+        [
+          '  push rbx\n'
+        ]
+        begin-asm)
      else
+      begin-asm))
+
+  (let actual-begin-asm1
+    (if (or (!= actual-begin-asm0 []) (> stack-size 0))
       (+
         [
           '  push rbp\n'
           '  mov rbp,rsp\n'
+          (if (> stack-size 0)
+            (join ['  sub rsp,' (to-str stack-size) '\n'] '')
+           else
+            '')
         ]
-        begin-asm)))
-
-  (let gen-body-asm
-    (fold
-      \gen-asm instr -> (instr-gen-asm-linux-x86_64-fasm instr gen-asm) <>
-      [gen []]
-      proc::'body'))
+        actual-begin-asm0)
+     else
+      actual-begin-asm0))
 
   (let end-asm
     (map
       \entry ->
         (proc-segment-var-gen-asm-linux-x86_64-fasm
           entry::'key'
-          entry::'value'
+          entry::'value'::'type'
+          entry::'value'::'is-param'
           true) <>
-      unique-var-locs))
+      unique-vars))
   (let end-asm-reversed (reverse end-asm))
 
-  (let actual-end-asm
-    (if (== end-asm-reversed [])
-      end-asm-reversed
-     else
+  (let actual-end-asm0
+    (if gen-with-body-asm::0::'scratch-reg-used'
       (+
         end-asm-reversed
         [
-          '  leave\n'
-        ])))
+          '  pop rbx\n'
+        ])
+     else
+      end-asm-reversed))
 
-  (if gen-body-asm::0::'has-errors'
-    (exit 1))
+  (let actual-end-asm1
+    (if (or (!= actual-end-asm0 []) (> stack-size 0))
+      (+
+        actual-end-asm0
+        [
+          (if (> stack-size 0)
+            (join ['  add rsp,' (to-str stack-size) '\n'] '')
+           else
+            '')
+          '  leave\n'
+        ])
+     else
+      actual-end-asm0))
 
   (join
     (+ ['public ' proc::'name' '\n' proc::'name' ':\n']
-       (after (+ actual-begin-asm (+ gen-body-asm::1 actual-end-asm)) '  ret\n'))
+       (after
+         (+ actual-begin-asm1
+         (+ gen-with-body-asm::1
+            (before '.end:\n'
+                    actual-end-asm1))) '  ret\n'))
     ''))
 
 (let extern-proc-gen-asm-linux-x86_64-fasm \proc ->
@@ -531,6 +688,14 @@
       meta::'str-ids')
     ''))
 
+(let get-stack-loc-linux-x86_64-fasm \type offset ->
+  (match offset
+    0   =>
+      (join [(get-ptr-prefix-linux-x86_64-fasm type) '[rsp]'] '')
+    ... =>
+      (join [(get-ptr-prefix-linux-x86_64-fasm type)
+             '[rsp+' (to-str offset) ']'] '')))
+
 (let proc-alloc-regs-linux-x86_64-fasm \item ->
   (match item::'type'
     ITEM-PROC-DEF =>
@@ -540,7 +705,8 @@
         (alloc-regs
           item::'meta'
           LINUX-x86_64-FASM-GENERAL-REGS
-          LINUX-x86_64-FASM-PROC-PARAM-REGS))
+          LINUX-x86_64-FASM-PROC-PARAM-REGS
+          get-stack-loc-linux-x86_64-fasm))
     ...           => item))
 
 (let gen-asm-linux-x86_64-fasm \ir gen-start ->

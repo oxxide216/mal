@@ -22,6 +22,7 @@
     'called-procs': []
     'str-ids': {}
     'strs-count': 0
+    'stack-size': 0
   })
 
 (let init-meta-gen \ir proc ->
@@ -49,6 +50,50 @@
   (match results
     []  => unit
     ... => results::0))
+
+(let get-bin-op-dest-type \gen op args ->
+  (if (!= gen::'arg-types'::0
+          gen::'arg-types'::1)
+    (error 'Operand types mismatch')
+    (set gen::'has-errors' true))
+
+  [gen::'arg-types'::0 gen])
+
+(let get-un-op-dest-type \gen op args ->
+  (if (or (== op OP-REF)
+          (== op OP-DEREF))
+    (if (!= args::0::'type' ARG-VAR)
+      (error 'Only variable can be referenced')
+      (set gen::'has-errors' true)
+     elif (== op OP-REF)
+      (let name args::0::'value')
+      (set gen::'meta'::'vars'::name::'ref-target' true)))
+
+  (match op
+    OP-REF   =>
+      (do
+        (let name args::0::'value')
+        (set gen::'meta'::'vars'::name::'ref-target' true)
+        (if (!= args::0::'type' ARG-VAR)
+          (error 'Only variable can be referenced')
+          (set gen::'has-errors' true))
+        [
+          {
+            'type': TYPE-PTR
+            'value': gen::'arg-types'::0
+          }
+          gen
+        ])
+    OP-DEREF =>
+      (do
+        (if (!= gen::'arg-types'::0::'type' TYPE-PTR)
+          (error 'Only pointer can be dereferenced')
+          (set gen::'has-errors' true))
+        (if (!= args::0::'type' ARG-VAR)
+          (error 'Only variable can be dereferenced')
+          (set gen::'has-errors' true))
+        [gen::'arg-types'::0::'value' gen])
+    ...      => [gen::'arg-types'::0 gen]))
 
 (let gen-meta-call \gen instr ->
   (let callee (get-proc gen::'ir' instr::'func' gen::'arg-types'))
@@ -121,17 +166,36 @@
           'begin': index
           'end': index
           'param-index': unit
+          'ref-target': false
         })
-    INSTR-OP          =>
-      (set
-        gen::'meta'::'vars'::(do instr::'dest')
-        {
-          'type': gen::'arg-types'::0
-          'uses': 0
-          'begin': index
-          'end': index
-          'param-index': unit
-        })
+    INSTR-BIN-OP      =>
+      (do
+        (let result (get-bin-op-dest-type gen instr::'op' instr::'args'))
+        (set gen result::1)
+        (set
+          gen::'meta'::'vars'::(do instr::'dest')
+          {
+            'type': result::0
+            'uses': 0
+            'begin': index
+            'end': index
+            'param-index': unit
+            'ref-target': false
+          }))
+    INSTR-UN-OP       =>
+      (do
+        (let result (get-un-op-dest-type gen instr::'op' instr::'args'))
+        (set gen result::1)
+        (set
+          gen::'meta'::'vars'::(do instr::'dest')
+          {
+            'type': result::0
+            'uses': 0
+            'begin': index
+            'end': index
+            'param-index': unit
+            'ref-target': false
+          }))
     INSTR-CALL        =>
       (set gen (gen-meta-call gen instr))
     INSTR-CALL-ASSIGN =>
@@ -145,6 +209,7 @@
             'begin': index
             'end': index
             'param-index': unit
+            'ref-target': false
           })))
 
   gen)
@@ -158,6 +223,7 @@
       'begin': 0
       'end': 0
       'param-index': param::1
+      'ref-target': false
     })
   gen)
 
@@ -168,7 +234,10 @@
         (let params-indexed (zip item::'params' (gen-range 0 (len item::'params'))))
         (let body-indexed (zip item::'body' (gen-range 0 (len item::'body'))))
         (let gen (fold gen-meta-param (init-meta-gen ir item) params-indexed))
-        (with item 'meta' (fold gen-meta-instr gen body-indexed)::'meta'))
+        (let result (fold gen-meta-instr gen body-indexed))
+        (if result::'has-errors'
+          (exit 1))
+        (with item 'meta' result::'meta'))
     ITEM-EXTERN-PROC-DECL =>
       (do
         (with item 'meta' (init-basic-meta item)))))

@@ -203,6 +203,17 @@
     ])
   ]))
 
+(let parse-un-expr \->
+  (parse-node 'un-expr' [
+    (parse-select [
+      (name-token TT-STAR 'type')
+      (name-token TT-AMPERSAND 'type')
+    ])
+    (parse-node 'rhs' [
+      (parse-expr)
+    ])
+  ]))
+
 (let parse-bool-expr \->
   (parse-node 'bool-expr' [
     (parse-node 'lhs' [
@@ -241,12 +252,25 @@
         ]))
       (skip-token TT-CPAREN)
     ])
-    (parse-node 'assign-op' [
+    (parse-node 'bin-op' [
       (name-token TT-IDENT 'var-name')
       (skip-token TT-ASSIGN)
       (parse-bin-expr)
     ])
+    (parse-node 'un-op' [
+      (name-token TT-IDENT 'var-name')
+      (skip-token TT-ASSIGN)
+      (parse-un-expr)
+    ])
     (parse-node 'assign' [
+      (name-token TT-IDENT 'var-name')
+      (skip-token TT-ASSIGN)
+      (parse-node 'expr' [
+        (parse-expr)
+      ])
+    ])
+    (parse-node 'deref-assign' [
+      (skip-token TT-STAR)
       (name-token TT-IDENT 'var-name')
       (skip-token TT-ASSIGN)
       (parse-node 'expr' [
