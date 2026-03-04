@@ -105,6 +105,8 @@
       (let param param-indexed::0)
       (let index param-indexed::1)
       (let type (get-arg-type-type param meta))
+      (let stack-type (type-to-stack-linux-x86_64-fasm type))
+      (let loc (arg-gen-asm-linux-x86_64-fasm param meta))
       (if (< index (len LINUX-x86_64-FASM-PROC-PARAM-REGS::type))
         (match param::'type'
           ARG-STRING =>
@@ -112,7 +114,7 @@
               '  lea '
               LINUX-x86_64-FASM-PROC-PARAM-REGS::type::index
               ',['
-              (arg-gen-asm-linux-x86_64-fasm param meta)
+              loc
               ']\n'
             ] '')
           ...        =>
@@ -120,15 +122,14 @@
               '  mov '
               LINUX-x86_64-FASM-PROC-PARAM-REGS::type::index
               ','
-              (arg-gen-asm-linux-x86_64-fasm param meta)
+              loc
               '\n'
           ] ''))
        else
-        (join [
-          '  push '
-          (arg-gen-asm-linux-x86_64-fasm param meta)
-          '\n'
-        ] '')) <>
+        (match (is-on-stack? param meta)
+          false => (join ['  push ' loc '\n'] '')
+          true  => (join ['  mov ' LINUX-x86_64-FASM-SCRATCH-REG::type ',' loc '\n'
+                          '  push ' LINUX-x86_64-FASM-SCRATCH-REG::stack-type '\n'] ''))) <>
   (reverse (zip params (gen-range 0 (len params))))))
 
 (let call-gen-asm-linux-x86_64-fasm \instr meta ->
