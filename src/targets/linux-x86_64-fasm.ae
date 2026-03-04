@@ -107,6 +107,10 @@
           unit => (get-stack-loc-linux-x86_64-fasm new-type var::'stack-offset')
           ...  => LINUX-x86_64-FASM-GENERAL-REGS::new-type::(do var::'loc-index')))))
 
+(let get-alignment \num amount ->
+  (let alignment (% num amount))
+  (- amount alignment))
+
 (let proc-params-gen-asm-linux-x86_64-fasm \params meta ->
   (fold
     \result param-indexed ->
@@ -151,28 +155,42 @@
 
 (let call-gen-asm-linux-x86_64-fasm \instr meta ->
   (let args-with-stack-usage (proc-params-gen-asm-linux-x86_64-fasm instr::'args' meta))
+  (let alignment (get-alignment args-with-stack-usage::'stack-usage' 16))
+  (let stack-usage (+ args-with-stack-usage::'stack-usage' alignment))
+  (let sub
+    (if (> alignment 0)
+      (join ['  sub rsp,' (to-str alignment) '\n'] '')
+     else
+      ''))
   (let add
-    (if (> args-with-stack-usage::'stack-usage' 0)
+    (if (> stack-usage 0)
       (join [
         '  add rsp,'
-        (to-str args-with-stack-usage::'stack-usage')
+        (to-str stack-usage)
         '\n'
       ] '')
      else
       ''))
   (join
     (+ args-with-stack-usage::'asm'
-       ['  call ' instr::'func' '\n' add])
+       [sub '  call ' instr::'func' '\n' add])
     ''))
 
 (let call-assign-gen-asm-linux-x86_64-fasm \instr meta ->
   (let dest-var meta::'vars'::(do instr::'dest'))
   (let args-with-stack-usage (proc-params-gen-asm-linux-x86_64-fasm instr::'args' meta))
+  (let alignment (get-alignment args-with-stack-usage::'stack-usage' 16))
+  (let stack-usage (+ args-with-stack-usage::'stack-usage' alignment))
+  (let sub
+    (if (> alignment 0)
+      (join ['  sub rsp,' (to-str alignment) '\n'] '')
+     else
+      ''))
   (let add
-    (if (> args-with-stack-usage::'stack-usage' 0)
+    (if (> stack-usage 0)
       (join [
         '  add rsp,'
-        (to-str args-with-stack-usage::'stack-usage')
+        (to-str stack-usage)
         '\n'
       ] '')
      else
@@ -180,6 +198,7 @@
   (join
     (+ args-with-stack-usage::'asm'
        [
+         sub
          '  call '
          instr::'func'
          '\n'
@@ -600,7 +619,8 @@
   (if gen-with-body-asm::0::'has-errors'
     (exit 1))
 
-  (let stack-size proc::'meta'::'stack-size')
+  (let alignment (get-alignment proc::'meta'::'stack-size' 16))
+  (let stack-size (+ proc::'meta'::'stack-size' alignment))
 
   (let vars
     (map
