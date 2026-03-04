@@ -35,16 +35,15 @@
   })
   (let ref-target var::'ref-target')
   (let type var::'type'::'type')
+  (let size TYPE-SIZE-MAP::(do var::'type'::'type'))
   (let loc (get-var-loc lifetime type ref-target meta::0
-                        regs param-regs meta::1 meta::0::'stack-size'
+                        regs param-regs meta::1 (+ meta::0::'stack-size' size)
                         get-stack-loc))
   (set meta::0::'vars'::name::'loc' loc::'name')
   (set meta::0::'vars'::name::'loc-index' loc::'index')
   (if (unit? loc::'index')
+    (set meta::0::'stack-size' (+ meta::0::'stack-size' size))
     (set meta::0::'vars'::name::'stack-offset' meta::0::'stack-size')
-    (set
-      meta::0::'stack-size'
-      (+ meta::0::'stack-size' TYPE-SIZE-MAP::(do var::'type'::'type')))
    else
     (if (unit? meta::1::(do loc::'index'))
       (set meta::1::(do loc::'index') [lifetime])

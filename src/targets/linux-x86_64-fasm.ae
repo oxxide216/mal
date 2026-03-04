@@ -1,4 +1,4 @@
-(use 'regs-x86_64')
+(use 'regs-linux-x86_64-fasm')
 (use 'alloc')
 
 (let LINUX-x86_64-FASM-ASM-BEGIN-WITH-START
@@ -89,9 +89,6 @@
         '\n'
       ] '')))
 
-(let reverse \list ->
-  (sort \item -> true <> list))
-
 (let get-arg-type-type \arg meta ->
   (match arg::'type'
     ARG-INT    => TYPE-S32
@@ -99,59 +96,100 @@
     ARG-VAR    =>
       meta::'vars'::(do arg::'value')::'type'::'type'))
 
+(let relocate-arg-with-type \arg new-type meta ->
+  (match arg::'type'
+    ARG-INT    => arg::'value'
+    ARG-STRING => arg::'value'
+    ARG-VAR    =>
+      (do
+        (let var meta::'vars'::(do arg::'value'))
+        (match var::'loc-index'
+          unit => (get-stack-loc-linux-x86_64-fasm new-type var::'stack-offset')
+          ...  => LINUX-x86_64-FASM-GENERAL-REGS::new-type::(do var::'loc-index')))))
+
 (let proc-params-gen-asm-linux-x86_64-fasm \params meta ->
-  (map
-    \param-indexed ->
+  (fold
+    \result param-indexed ->
       (let param param-indexed::0)
       (let index param-indexed::1)
       (let type (get-arg-type-type param meta))
       (let stack-type (type-to-stack-linux-x86_64-fasm type))
       (let loc (arg-gen-asm-linux-x86_64-fasm param meta))
-      (if (< index (len LINUX-x86_64-FASM-PROC-PARAM-REGS::type))
-        (match param::'type'
-          ARG-STRING =>
-            (join [
-              '  lea '
-              LINUX-x86_64-FASM-PROC-PARAM-REGS::type::index
-              ',['
-              loc
-              ']\n'
-            ] '')
-          ...        =>
-            (join [
-              '  mov '
-              LINUX-x86_64-FASM-PROC-PARAM-REGS::type::index
-              ','
-              loc
-              '\n'
-          ] ''))
-       else
-        (match (is-on-stack? param meta)
-          false => (join ['  push ' loc '\n'] '')
-          true  => (join ['  mov ' LINUX-x86_64-FASM-SCRATCH-REG::type ',' loc '\n'
-                          '  push ' LINUX-x86_64-FASM-SCRATCH-REG::stack-type '\n'] ''))) <>
+      (let asm
+        (if (< index (len LINUX-x86_64-FASM-PROC-PARAM-REGS::type))
+          (match param::'type'
+            ARG-STRING =>
+              (join [
+                '  lea '
+                LINUX-x86_64-FASM-PROC-PARAM-REGS::type::index
+                ',['
+                loc
+                ']\n'
+              ] '')
+            ...        =>
+              (join [
+                '  mov '
+                LINUX-x86_64-FASM-PROC-PARAM-REGS::type::index
+                ','
+                loc
+                '\n'
+            ] ''))
+         else
+          (set
+            result::'stack-usage'
+            (+ result::'stack-usage' TYPE-SIZE-MAP::stack-type))
+          (if (or (is-on-stack? param meta) (!= type stack-type))
+              (let new-loc LINUX-x86_64-FASM-SCRATCH-REG::type)
+              (let new-stack-loc LINUX-x86_64-FASM-SCRATCH-REG::stack-type)
+              (join ['  mov ' new-loc ',' loc '\n'
+                     '  push ' new-stack-loc '\n'] '')
+           else
+            (join ['  push ' loc '\n'] ''))))
+      (with result 'asm' (after result::'asm' asm)) <>
+  { 'asm': [] 'stack-usage': 0 }
   (reverse (zip params (gen-range 0 (len params))))))
 
 (let call-gen-asm-linux-x86_64-fasm \instr meta ->
+  (let args-with-stack-usage (proc-params-gen-asm-linux-x86_64-fasm instr::'args' meta))
+  (let add
+    (if (> args-with-stack-usage::'stack-usage' 0)
+      (join [
+        '  add rsp,'
+        (to-str args-with-stack-usage::'stack-usage')
+        '\n'
+      ] '')
+     else
+      ''))
   (join
-    (+ (proc-params-gen-asm-linux-x86_64-fasm instr::'args' meta)
-       ['  call ' instr::'func' '\n'])
+    (+ args-with-stack-usage::'asm'
+       ['  call ' instr::'func' '\n' add])
     ''))
 
 (let call-assign-gen-asm-linux-x86_64-fasm \instr meta ->
   (let dest-var meta::'vars'::(do instr::'dest'))
+  (let args-with-stack-usage (proc-params-gen-asm-linux-x86_64-fasm instr::'args' meta))
+  (let add
+    (if (> args-with-stack-usage::'stack-usage' 0)
+      (join [
+        '  add rsp,'
+        (to-str args-with-stack-usage::'stack-usage')
+        '\n'
+      ] '')
+     else
+      ''))
   (join
-    (+ (proc-params-gen-asm-linux-x86_64-fasm instr::'args' meta)
+    (+ args-with-stack-usage::'asm'
        [
          '  call '
          instr::'func'
          '\n'
+         add
          '  mov '
          dest-var::'loc'
          ','
          LINUX-x86_64-FASM-RETURN-REG::(do dest-var::'type'::'type')
          '\n'
-       ])
+      ])
     ''))
 
 (let inline-asm-gen-asm-linux-x86_64-fasm \instr ->
@@ -720,12 +758,8 @@
     ''))
 
 (let get-stack-loc-linux-x86_64-fasm \type offset ->
-  (match offset
-    0   =>
-      (join [(get-ptr-prefix-linux-x86_64-fasm type) '[rsp]'] '')
-    ... =>
-      (join [(get-ptr-prefix-linux-x86_64-fasm type)
-             '[rsp+' (to-str offset) ']'] '')))
+  (join [(get-ptr-prefix-linux-x86_64-fasm type)
+         '[rbp-' (to-str offset) ']'] ''))
 
 (let proc-alloc-regs-linux-x86_64-fasm \item ->
   (match item::'type'
