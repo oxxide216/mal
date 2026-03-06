@@ -4,9 +4,9 @@ struct svec2
 end
 
 proc main() -> u8
-  str0 = "Hello, World!\n"
-  str1 = "Foo, Bar!\n"
-  str2 = "Bazz!\n"
+  let str0 = "Hello, World!\n"
+  let str1 = "Foo, Bar!\n"
+  let str2 = "Bazz!\n"
   if 0 != 0
     print(str0, 14)
   elif 1 == 1
@@ -14,24 +14,24 @@ proc main() -> u8
   else
     print(str1, 10)
   end
-  i = 0
+  let i = 0
   while i < 10
     print("In a loop!\n", 11)
     i = i + 1
   end
-  a = 5
-  r = &a
+  let a = 5
+  let r = &a
   *r = 2
-  b = *r
-  c = a + b
+  let b = *r
+  let c = a + b
   retval c as u8
 end
 
 proc var() -> s32
-  c = 1
-  a = 2
-  b = a
-  d = c
+  let c = 1
+  let a = 2
+  let b = a
+  let d = c
   retval b
 end
 

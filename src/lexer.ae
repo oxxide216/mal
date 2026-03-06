@@ -138,6 +138,7 @@
 (let lex-whail  (lex-lit 'while'))
 (let lex-as     (lex-lit 'as'))
 (let lex-struct (lex-lit 'struct'))
+(let lex-let    (lex-lit 'let'))
 
 (let lex-ident
   (lex-then
@@ -179,6 +180,7 @@
   (new-grammar lex-whail      TT-WHILE)
   (new-grammar lex-as         TT-AS)
   (new-grammar lex-struct     TT-STRUCT)
+  (new-grammar lex-let        TT-LET)
   (new-grammar lex-ident      TT-IDENT)
   (new-grammar lex-oparen     TT-OPAREN)
   (new-grammar lex-cparen     TT-CPAREN)

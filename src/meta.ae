@@ -168,18 +168,22 @@
         (error gen::'meta'::'name' ': unexpected return type')
         (set gen::'has-errors' true))
     INSTR-ASSIGN      =>
-      (set
-        gen::'meta'::'vars'::(do instr::'dest')
-        {
-          'type': gen::'arg-types'::0
-          'uses': 0
-          'begin': index
-          'end': index
-          'param-index': unit
-          'ref-target': false
-        })
+      (if instr::'let'
+        (set
+          gen::'meta'::'vars'::(do instr::'dest')
+          {
+            'type': gen::'arg-types'::0
+            'uses': 0
+            'begin': index
+            'end': index
+            'param-index': unit
+            'ref-target': false
+          })
+       else
+        (error 'Symbol ' instr::'dest' ' was not defined before usage')
+        (set gen::'meta'::'has-errors' true))
     INSTR-BIN-OP      =>
-      (do
+      (if instr::'let'
         (let result (get-bin-op-dest-type gen instr::'op' instr::'args'))
         (set gen result::1)
         (set
@@ -191,9 +195,12 @@
             'end': index
             'param-index': unit
             'ref-target': false
-          }))
+          })
+       else
+        (error 'Symbol ' instr::'dest' ' was not defined before usage')
+        (set gen::'meta'::'has-errors' true))
     INSTR-UN-OP       =>
-      (do
+      (if instr::'let'
         (let result (get-un-op-dest-type gen instr::'op' instr::'args'))
         (set gen result::1)
         (set
@@ -205,11 +212,14 @@
             'end': index
             'param-index': unit
             'ref-target': false
-          }))
+          })
+       else
+        (error 'Symbol ' instr::'dest' ' was not defined before usage')
+        (set gen::'meta'::'has-errors' true))
     INSTR-CALL        =>
       (set gen (gen-meta-call gen instr))
     INSTR-CALL-ASSIGN =>
-      (do
+      (if instr::'let'
         (set gen (gen-meta-call gen instr))
         (set
           gen::'meta'::'vars'::(do instr::'dest')
@@ -220,7 +230,10 @@
             'end': index
             'param-index': unit
             'ref-target': false
-          })))
+          })
+       else
+        (error 'Symbol ' instr::'dest' ' was not defined before usage')
+        (set gen::'meta'::'has-errors' true)))
 
   gen)
 

@@ -248,6 +248,8 @@
       ])
     ])
     (parse-node 'call-assign' [
+      (parse-opt
+        (name-token TT-LET 'let'))
       (name-token TT-IDENT 'var-name')
       (skip-token TT-ASSIGN)
       (name-token TT-IDENT 'func-name')
@@ -260,16 +262,22 @@
       (skip-token TT-CPAREN)
     ])
     (parse-node 'bin-op' [
+      (parse-opt
+        (name-token TT-LET 'let'))
       (name-token TT-IDENT 'var-name')
       (skip-token TT-ASSIGN)
       (parse-bin-expr)
     ])
     (parse-node 'un-op' [
+      (parse-opt
+        (name-token TT-LET 'let'))
       (name-token TT-IDENT 'var-name')
       (skip-token TT-ASSIGN)
       (parse-un-expr)
     ])
     (parse-node 'assign' [
+      (parse-opt
+        (name-token TT-LET 'let'))
       (name-token TT-IDENT 'var-name')
       (skip-token TT-ASSIGN)
       (parse-node 'expr' [

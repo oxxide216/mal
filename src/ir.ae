@@ -102,6 +102,7 @@
       'assign' => [
         {
           'type': INSTR-ASSIGN
+          'let': (not-unit? instr::'let')
           'dest': instr::'var-name'
           'args': [
             (gen-ir-arg instr::'expr')
@@ -112,6 +113,7 @@
       'bin-op' => [
         {
           'type': INSTR-BIN-OP
+          'let': (not-unit? instr::'let')
           'dest': instr::'var-name'
           'op': AST-BIN-OP-MAP::(do instr::'bin-expr'::'type')
           'args': [
@@ -124,6 +126,7 @@
       'un-op' => [
         {
           'type': INSTR-UN-OP
+          'let': (not-unit? instr::'let')
           'dest': instr::'var-name'
           'op': AST-UN-OP-MAP::(do instr::'un-expr'::'type')
           'args': [
@@ -143,6 +146,7 @@
       'call-assign' => [
         {
           'type': INSTR-CALL-ASSIGN
+          'let': (not-unit? instr::'let')
           'dest': instr::'var-name'
           'func': instr::'func-name'
           'args': (map gen-ir-arg instr::'args')
