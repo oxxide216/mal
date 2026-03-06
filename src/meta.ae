@@ -107,6 +107,13 @@
   gen)
 
 (let gen-meta-arg \gen arg index ->
+  (if arg::'cast'
+    (ret
+      (with
+        gen
+        'arg-types'
+        (after gen::'arg-types' arg::'cast'))))
+
   (let type
     (match arg::'type'
       ARG-INT    => {
@@ -130,13 +137,16 @@
 
           (if (unit? gen::'meta'::'vars'::name)
             (error 'Symbol ' name ' was not defined before usage')
-            (set gen::'meta'::'has-errors' true))
-
-          (set gen::'meta'::'vars'::name::'uses'
-               (+ gen::'meta'::'vars'::name::'uses' 1))
-          (set gen::'meta'::'vars'::name::'end' index)
-
-          gen::'meta'::'vars'::name::'type')))
+            (set gen::'meta'::'has-errors' true)
+            {
+              'type': TYPE-UNIT
+              'value': unit
+            }
+           else
+            (set gen::'meta'::'vars'::name::'uses'
+                 (+ gen::'meta'::'vars'::name::'uses' 1))
+            (set gen::'meta'::'vars'::name::'end' index)
+            gen::'meta'::'vars'::name::'type'))))
 
   (with
     gen
@@ -156,7 +166,7 @@
     INSTR-RETURN      =>
       (if (!= gen::'arg-types'::0 gen::'meta'::'return-type')
         (error gen::'meta'::'name' ': unexpected return type')
-        (set gen::'meta'::'has-errors' true))
+        (set gen::'has-errors' true))
     INSTR-ASSIGN      =>
       (set
         gen::'meta'::'vars'::(do instr::'dest')
@@ -210,31 +220,6 @@
             'end': index
             'param-index': unit
             'ref-target': false
-          }))
-    INSTR-CAST        =>
-      (do
-        (let can-cast
-          (can-cast?
-            gen::'arg-types'::0
-            instr::'dest-type'))
-
-        (if (unit? can-cast)
-          (error 'Cannot cast '
-                 (type-to-str gen::'arg-types'::0)
-                 ' -> '
-                 (type-to-str instr::'dest-type')
-                 '\n')
-          (set gen::'meta'::'has-errors' true))
-
-        (set
-          gen::'meta'::'vars'::(do instr::'dest')
-          {
-            'type': instr::'dest-type'
-            'uses': 0
-            'begin': index
-            'end': index
-            'param-index': unit
-            'ref-target': false
           })))
 
   gen)
@@ -268,4 +253,4 @@
         (with item 'meta' (init-basic-meta item)))))
 
 (let gen-meta \ir ->
-  (map \item -> (gen-meta-item ir item) <> ir))
+  (filter not-unit? (map \item -> (gen-meta-item ir item) <> ir)))

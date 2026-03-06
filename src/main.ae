@@ -34,8 +34,6 @@
   (println ir))
 
 (let meta-ir (gen-meta ir))
-(if (!= (filter \item -> (not-unit? item::'meta'::'has-errors') <> meta-ir) [])
-  (exit 1))
 (if (== config::'debug-output' DEBUG-OUTPUT-TYPES)
   (println meta-ir))
 

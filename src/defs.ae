@@ -33,6 +33,7 @@
 (let TT-ELIF       (count))
 (let TT-WHILE      (count))
 (let TT-AS         (count))
+(let TT-STRUCT     (count))
 (let TT-IDENT      (count))
 (let TT-OPAREN     (count))
 (let TT-CPAREN     (count))
@@ -70,21 +71,23 @@
 
 (let ITEM-PROC-DEF         (count 0))
 (let ITEM-EXTERN-PROC-DECL (count))
+(let ITEM-STRUCT-DEF       (count))
 
 (let ARG-INT    (count 0))
 (let ARG-STRING (count))
 (let ARG-VAR    (count))
 
-(let TYPE-UNIT (count 0))
-(let TYPE-S8   (count))
-(let TYPE-S16  (count))
-(let TYPE-S32  (count))
-(let TYPE-S64  (count))
-(let TYPE-U8   (count))
-(let TYPE-U16  (count))
-(let TYPE-U32  (count))
-(let TYPE-U64  (count))
-(let TYPE-PTR  (count))
+(let TYPE-UNIT   (count 0))
+(let TYPE-S8     (count))
+(let TYPE-S16    (count))
+(let TYPE-S32    (count))
+(let TYPE-S64    (count))
+(let TYPE-U8     (count))
+(let TYPE-U16    (count))
+(let TYPE-U32    (count))
+(let TYPE-U64    (count))
+(let TYPE-PTR    (count))
+(let TYPE-STRUCT (count))
 
 (let TYPES-MAP {
   'unit': TYPE-UNIT

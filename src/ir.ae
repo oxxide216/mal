@@ -13,17 +13,26 @@
 
 (let gen-ir-arg \expr ->
   (match true
-    (not-unit? expr::'int') => {
+    (not-unit? expr::'expr'::'int') => {
       'type': ARG-INT
-      'value': expr::'int'::'value'
+      'value': expr::'expr'::'int'::'value'
+      'cast':
+        (if expr::'expr'::'cast'
+          (gen-ir-type expr::'expr'::'cast'::'type'))
     }
-    (not-unit? expr::'str') => {
+    (not-unit? expr::'expr'::'str') => {
       'type': ARG-STRING
-      'value': expr::'str'::'value'
+      'value': expr::'expr'::'str'::'value'
+      'cast':
+        (if expr::'expr'::'cast'
+          (gen-ir-type expr::'expr'::'cast'::'type'))
     }
-    (not-unit? expr::'var') => {
+    (not-unit? expr::'expr'::'var') => {
       'type': ARG-VAR
-      'value': expr::'var'::'name'
+      'value': expr::'expr'::'var'::'name'
+      'cast':
+        (if expr::'expr'::'cast'
+          (gen-ir-type expr::'expr'::'cast'::'type'))
     }
     ...                     =>
       (do
@@ -94,17 +103,6 @@
         {
           'type': INSTR-ASSIGN
           'dest': instr::'var-name'
-          'args': [
-            (gen-ir-arg instr::'expr')
-          ]
-          'last': last
-        }
-      ]
-      'cast' => [
-        {
-          'type': INSTR-CAST
-          'dest': instr::'var-name'
-          'dest-type': (gen-ir-type instr::'type')
           'args': [
             (gen-ir-arg instr::'expr')
           ]
@@ -332,6 +330,20 @@
           (match instr::'return'
             unit => { 'type': TYPE-UNIT }
             ...  => (gen-ir-type instr::'return'::'type'))
+      }
+    ]
+    'struct-def' => [
+      {
+        'type': ITEM-STRUCT-DEF
+        'name': instr::'name'
+        'fields':
+          (map
+            \field ->
+              {
+                'name': field::'name'
+                'type': (gen-ir-type field::'type')
+              } <>
+            instr::'fields')
       }
     ]))
 

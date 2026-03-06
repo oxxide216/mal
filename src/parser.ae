@@ -174,16 +174,23 @@
   \parser -> ((func args) parser))
 
 (let parse-expr \->
-  (parse-select [
-    (parse-node 'int' [
-      (name-token TT-INT 'value')
+  (parse-node 'expr' [
+    (parse-select [
+      (parse-node 'int' [
+        (name-token TT-INT 'value')
+      ])
+      (parse-node 'str' [
+        (name-token TT-STRING 'value')
+      ])
+      (parse-node 'var' [
+        (name-token TT-IDENT 'name')
+      ])
     ])
-    (parse-node 'str' [
-      (name-token TT-STRING 'value')
-    ])
-    (parse-node 'var' [
-      (name-token TT-IDENT 'name')
-    ])
+    (parse-opt
+      (parse-node 'cast' [
+        (skip-token TT-AS)
+        (parse-type)
+      ]))
   ]))
 
 (let parse-bin-expr \->
@@ -261,15 +268,6 @@
       (name-token TT-IDENT 'var-name')
       (skip-token TT-ASSIGN)
       (parse-un-expr)
-    ])
-    (parse-node 'cast' [
-      (name-token TT-IDENT 'var-name')
-      (skip-token TT-ASSIGN)
-      (parse-node 'expr' [
-        (parse-expr)
-      ])
-      (skip-token TT-AS)
-      (parse-type)
     ])
     (parse-node 'assign' [
       (name-token TT-IDENT 'var-name')
@@ -390,11 +388,25 @@
       ]))
   ]))
 
+(let parse-struct \->
+  (parse-node 'struct-def' [
+    (skip-token TT-STRUCT)
+    (name-token TT-IDENT 'name')
+    (parse-list 'fields'
+      (parse-node 'field' [
+        (name-token TT-IDENT 'name')
+        (skip-token TT-COLON)
+        (parse-type)
+      ]))
+    (skip-token TT-END)
+  ]))
+
 (let parse-program \->
   (parse-list 'program'
     (parse-select [
       (parse-proc-def)
       (parse-extern-proc-decl)
+      (parse-struct)
     ])))
 
 (let parse \tokens ->

@@ -50,6 +50,22 @@
       ] '')
     ARG-VAR    => meta::'vars'::(do arg::'value')::'loc'))
 
+(let arg-gen-asm-type-linux-x86_64-fasm \arg type meta ->
+  (match arg::'type'
+    ARG-INT    => arg::'value'
+    ARG-STRING =>
+      (join [
+        meta::'name'
+        '@str'
+        (to-str meta::'str-ids'::(do arg::'value'))
+      ] '')
+    ARG-VAR    =>
+      (do
+        (let var meta::'vars'::(do arg::'value'))
+        (match var::'loc-index'
+          unit => (get-stack-loc-linux-x86_64-fasm type var::'stack-offset')
+          ...  => LINUX-x86_64-FASM-GENERAL-REGS::type::(do var::'loc-index')::'name'))))
+
 (let is-on-stack? \arg meta ->
   (match arg::'type'
     ARG-VAR => (unit? meta::'vars'::(do arg::'value')::'loc-index')
@@ -61,9 +77,10 @@
     unit => end
     ...  =>
       (do
+        (let type meta::'return-type'::'type')
         (let return-loc
-          LINUX-x86_64-FASM-RETURN-REG::(do meta::'return-type'::'type'))
-        (let loc (arg-gen-asm-linux-x86_64-fasm instr::'args'::0 meta))
+          LINUX-x86_64-FASM-RETURN-REG::type)
+        (let loc (arg-gen-asm-type-linux-x86_64-fasm instr::'args'::0 type meta))
         (if (== loc return-loc)
           end
          else
@@ -77,7 +94,7 @@
         '  lea '
         dest-var::'loc'
         ',['
-        (arg-gen-asm-linux-x86_64-fasm instr::'args'::0 meta)
+        (arg-gen-asm-type-linux-x86_64-fasm instr::'args'::0 dest-var::'type'::'type' meta)
         ']\n'
       ] '')
     ...      =>
@@ -85,27 +102,17 @@
         '  mov '
         dest-var::'loc'
         ','
-        (arg-gen-asm-linux-x86_64-fasm instr::'args'::0 meta)
+        (arg-gen-asm-type-linux-x86_64-fasm instr::'args'::0 dest-var::'type'::'type' meta)
         '\n'
       ] '')))
 
 (let get-arg-type-type \arg meta ->
+  (println arg::'cast')
   (match arg::'type'
     ARG-INT    => TYPE-S32
     ARG-STRING => TYPE-PTR
     ARG-VAR    =>
       meta::'vars'::(do arg::'value')::'type'::'type'))
-
-(let relocate-arg-with-type \arg new-type meta ->
-  (match arg::'type'
-    ARG-INT    => arg::'value'
-    ARG-STRING => arg::'value'
-    ARG-VAR    =>
-      (do
-        (let var meta::'vars'::(do arg::'value'))
-        (match var::'loc-index'
-          unit => (get-stack-loc-linux-x86_64-fasm new-type var::'stack-offset')
-          ...  => LINUX-x86_64-FASM-GENERAL-REGS::new-type::(do var::'loc-index')))))
 
 (let get-alignment \num amount ->
   (let alignment (% num amount))
@@ -322,8 +329,8 @@
   (let dest-stack (unit? dest-var::'loc-index'))
   (let rhs-to-temp (and force-rhs-loc (!= rhs::'type' ARG-VAR)))
 
-  (let lhs-loc (arg-gen-asm-linux-x86_64-fasm lhs meta))
-  (let rhs-loc (arg-gen-asm-linux-x86_64-fasm rhs meta))
+  (let lhs-loc (arg-gen-asm-type-linux-x86_64-fasm lhs dest-var::'type'::'type' meta))
+  (let rhs-loc (arg-gen-asm-type-linux-x86_64-fasm rhs dest-var::'type'::'type' meta))
   (let new-rhs-loc
     (if rhs-to-temp
       LINUX-x86_64-FASM-SCRATCH-REG::(do dest-var::'type'::'type')
@@ -445,7 +452,7 @@
     OP-MOD => (op-mod-gen-asm-linux-x86_64-fasm dest-var lhs rhs meta)))
 
 (let op-ref-gen-asm-linux-x86_64-fasm \dest-var rhs meta ->
-  (let rhs-loc (arg-gen-asm-linux-x86_64-fasm rhs meta))
+  (let rhs-loc (arg-gen-asm-type-linux-x86_64-fasm rhs dest-var::'type'::'type' meta))
   (let scratch LINUX-x86_64-FASM-SCRATCH-REG::(do dest-var::'type'::'type'))
   [
     (if (unit? dest-var::'loc-index')
@@ -528,34 +535,6 @@
     (is-on-stack? instr::'args'::0 meta)
   ])
 
-(let cast-gen-asm-linux-x86_64-fasm \instr meta ->
-  (let dest-var meta::'vars'::(do instr::'dest'))
-  (let rhs instr::'args'::0)
-
-  (let rhs-loc
-    (match rhs::'type'
-      ARG-INT    => rhs::'value'
-      ARG-STRING =>
-        (join [
-          meta::'name'
-          '@str'
-          (to-str meta::'str-ids'::(do rhs::'value'))
-        ] '')
-      ARG-VAR    =>
-        (do
-          (let type dest-var::'type'::'type')
-          (let var meta::'vars'::(do rhs::'value'))
-          (let loc-index var::'loc-index')
-          (match loc-index
-            unit =>
-              (get-stack-loc-linux-x86_64-fasm type var::'stack-offset')
-            ...  =>
-              LINUX-x86_64-FASM-GENERAL-REGS::type::loc-index::'name'))))
-
-  (match rhs::'type'
-    ARG-STRING => (join ['  lea ' dest-var::'loc' ',[' rhs-loc ']\n'] '')
-    ...        => (join ['  mov ' dest-var::'loc' ',' rhs-loc '\n'] '')))
-
 (let instr-gen-asm-linux-x86_64-fasm \instr gen-asm ->
   (let gen gen-asm::0)
   (let asm
@@ -584,7 +563,6 @@
           (let result (deref-assign-gen-asm-linux-x86_64-fasm instr gen::'meta'))
           (set gen::'scratch-reg-used' result::1)
           result::0)
-      INSTR-CAST          => (cast-gen-asm-linux-x86_64-fasm instr gen::'meta')
       ...                 =>
         (do
           (error 'Unknown instr type: ' instr::'type')
@@ -734,7 +712,8 @@
 (let item-gen-asm-linux-x86_64-fasm \item ir ->
   (match item::'type'
     ITEM-PROC-DEF         => (proc-gen-asm-linux-x86_64-fasm item ir)
-    ITEM-EXTERN-PROC-DECL => (extern-proc-gen-asm-linux-x86_64-fasm item)))
+    ITEM-EXTERN-PROC-DECL => (extern-proc-gen-asm-linux-x86_64-fasm item)
+    ITEM-STRUCT-DEF       => ''))
 
 (let escape-str \str ->
   (let index (get-index str '\\'))
