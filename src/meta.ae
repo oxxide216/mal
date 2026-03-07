@@ -153,6 +153,17 @@
     'arg-types'
     (after gen::'arg-types' type)))
 
+(let use-dest-var \gen instr index ->
+  (let name instr::'dest')
+  (if (unit? gen::'meta'::'vars'::name)
+    (error 'Symbol ' name ' was not defined before usage')
+    (set gen::'has-errors' true)
+   else
+    (set gen::'meta'::'vars'::name::'uses'
+         (+ gen::'meta'::'vars'::name::'uses' 1))
+    (set gen::'meta'::'vars'::name::'end' index))
+  gen)
+
 (let gen-meta-instr \gen instr-indexed ->
   (let instr instr-indexed::0)
   (let index instr-indexed::1)
@@ -180,8 +191,7 @@
             'ref-target': false
           })
        else
-        (error 'Symbol ' instr::'dest' ' was not defined before usage')
-        (set gen::'has-errors' true))
+        (set gen (use-dest-var gen instr index)))
     INSTR-BIN-OP      =>
       (if instr::'let'
         (let result (get-bin-op-dest-type gen instr::'op' instr::'args'))
@@ -197,8 +207,7 @@
             'ref-target': false
           })
        else
-        (error 'Symbol ' instr::'dest' ' was not defined before usage')
-        (set gen::'has-errors' true))
+        (set gen (use-dest-var gen instr index)))
     INSTR-UN-OP       =>
       (if instr::'let'
         (let result (get-un-op-dest-type gen instr::'op' instr::'args'))
@@ -214,26 +223,25 @@
             'ref-target': false
           })
        else
-        (error 'Symbol ' instr::'dest' ' was not defined before usage')
-        (set gen::'has-errors' true))
+        (set gen (use-dest-var gen instr index)))
     INSTR-CALL        =>
       (set gen (gen-meta-call gen instr))
     INSTR-CALL-ASSIGN =>
-      (if instr::'let'
+      (do
         (set gen (gen-meta-call gen instr))
-        (set
-          gen::'meta'::'vars'::(do instr::'dest')
-          {
-            'type': gen::'return-type'
-            'uses': 0
-            'begin': index
-            'end': index
-            'param-index': unit
-            'ref-target': false
-          })
-       else
-        (error 'Symbol ' instr::'dest' ' was not defined before usage')
-        (set gen::'has-errors' true)))
+        (if instr::'let'
+          (set
+            gen::'meta'::'vars'::(do instr::'dest')
+            {
+              'type': gen::'return-type'
+              'uses': 0
+              'begin': index
+              'end': index
+              'param-index': unit
+              'ref-target': false
+            })
+         else
+          (set gen (use-dest-var gen instr index)))))
 
   gen)
 
