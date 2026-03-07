@@ -33,7 +33,8 @@
          '  --target [TARGET]         output assembly for [TARGET].\n'
          '  --debug [TYPE]            output debug information of [TYPE].\n'
          '  --libc                    link with libc.\n'
-         '  --temp [DIR]              output temporary files into [DIR].\n')
+         '  --temp [DIR]              output temporary files into [DIR].\n'
+         '  -l[FLAG] -L[FLAG]         linker flags.\n')
   (exit 0))
 
 (let parse-args \args ->
