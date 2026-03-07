@@ -100,7 +100,7 @@
   (if (unit? callee)
     (let signature (join (map type-to-str gen::'arg-types') ', ') )
     (error 'Procedure ' instr::'func' '(' signature ') was not defined before usage')
-    (set gen::'meta'::'has-errors' true)
+    (set gen::'has-errors' true)
    else
     (set gen::'meta'::'called-procs' (after gen::'meta'::'called-procs' callee))
     (set gen::'return-type' callee::'return-type'))
@@ -137,7 +137,7 @@
 
           (if (unit? gen::'meta'::'vars'::name)
             (error 'Symbol ' name ' was not defined before usage')
-            (set gen::'meta'::'has-errors' true)
+            (set gen::'has-errors' true)
             {
               'type': TYPE-UNIT
               'value': unit
@@ -181,7 +181,7 @@
           })
        else
         (error 'Symbol ' instr::'dest' ' was not defined before usage')
-        (set gen::'meta'::'has-errors' true))
+        (set gen::'has-errors' true))
     INSTR-BIN-OP      =>
       (if instr::'let'
         (let result (get-bin-op-dest-type gen instr::'op' instr::'args'))
@@ -198,7 +198,7 @@
           })
        else
         (error 'Symbol ' instr::'dest' ' was not defined before usage')
-        (set gen::'meta'::'has-errors' true))
+        (set gen::'has-errors' true))
     INSTR-UN-OP       =>
       (if instr::'let'
         (let result (get-un-op-dest-type gen instr::'op' instr::'args'))
@@ -215,7 +215,7 @@
           })
        else
         (error 'Symbol ' instr::'dest' ' was not defined before usage')
-        (set gen::'meta'::'has-errors' true))
+        (set gen::'has-errors' true))
     INSTR-CALL        =>
       (set gen (gen-meta-call gen instr))
     INSTR-CALL-ASSIGN =>
@@ -233,7 +233,7 @@
           })
        else
         (error 'Symbol ' instr::'dest' ' was not defined before usage')
-        (set gen::'meta'::'has-errors' true)))
+        (set gen::'has-errors' true)))
 
   gen)
 
