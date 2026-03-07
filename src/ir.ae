@@ -1,16 +1,5 @@
 (use 'defs')
 
-(let gen-ir-type \node ->
-  (match node::'type'
-    '&'   => {
-      'type': TYPE-PTR
-      'value': (gen-ir-type node::'value'::'type')
-    }
-    ... => {
-      'type': TYPES-MAP::(do node::'type')
-      'value': unit
-    }))
-
 (let gen-ir-arg \expr ->
   (match true
     (not-unit? expr::'expr'::'int') => {
@@ -18,21 +7,21 @@
       'value': expr::'expr'::'int'::'value'
       'cast':
         (if expr::'expr'::'cast'
-          (gen-ir-type expr::'expr'::'cast'::'type'))
+          expr::'expr'::'cast'::'type')
     }
     (not-unit? expr::'expr'::'str') => {
       'type': ARG-STRING
       'value': expr::'expr'::'str'::'value'
       'cast':
         (if expr::'expr'::'cast'
-          (gen-ir-type expr::'expr'::'cast'::'type'))
+          expr::'expr'::'cast'::'type')
     }
     (not-unit? expr::'expr'::'var') => {
       'type': ARG-VAR
       'value': expr::'expr'::'var'::'name'
       'cast':
         (if expr::'expr'::'cast'
-          (gen-ir-type expr::'expr'::'cast'::'type'))
+          expr::'expr'::'cast'::'type')
     }
     ...                     =>
       (do
@@ -308,13 +297,13 @@
             \param ->
               {
                 'name': param::'name'
-                'type': (gen-ir-type param::'type')
+                'type': param::'type'
               } <>
             instr::'params')
         'return-type':
           (match instr::'return'
-            unit => { 'type': TYPE-UNIT }
-            ...  => (gen-ir-type instr::'return'::'type'))
+            unit => { 'type': 'unit' 'value': unit }
+            ...  => instr::'return'::'type')
         'body': (gen-ir-instrs instr::'body' true 0)::0
       }
     ]
@@ -327,13 +316,13 @@
             \param ->
               {
                 'name': param::'name'
-                'type': (gen-ir-type param::'type')
+                'type': param::'type'
               } <>
             instr::'params')
         'return-type':
           (match instr::'return'
             unit => { 'type': TYPE-UNIT }
-            ...  => (gen-ir-type instr::'return'::'type'))
+            ...  => instr::'return'::'type')
       }
     ]
     'struct-def' => [
@@ -345,7 +334,7 @@
             \field ->
               {
                 'name': field::'name'
-                'type': (gen-ir-type field::'type')
+                'type': field::'type'
               } <>
             instr::'fields')
       }

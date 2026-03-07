@@ -10,22 +10,39 @@
 
 (let get-var-loc \lifetime type ref-target meta regs
                   param-regs reg-lifetimes stack-size
-                  get-stack-loc ->
-  (if ref-target
-    (ret { 'name': (get-stack-loc type stack-size) 'index': unit }))
+                  get-stack-loc param-index ->
+  (let is-param (not-unit? param-index))
 
+  (if ref-target
+    (if (not is-param)
+      (ret { 'name': (get-stack-loc type stack-size false) 'index': unit })
+     elif (< param-index (len param-regs::type))
+      (ret { 'name': (get-stack-loc type stack-size false) 'index': unit })))
+
+  (let final-regs
+    (if is-param
+      param-regs
+     else
+      regs))
   (let reg-index
-    (for i in (gen-range 0 (len regs::type))
-      (let name regs::type::i::'name')
-      (if (unit? reg-lifetimes::i)
-        (ret i)
-       else
-        (if (not (lifetimes-collide? reg-lifetimes::i lifetime))
-          (ret i)))))
+    (match param-index
+      unit =>
+        (for i in (gen-range 0 (len final-regs::type))
+          (let name final-regs::type::i::'name')
+          (if (unit? reg-lifetimes::i)
+            (ret i)
+           else
+            (if (not (lifetimes-collide? reg-lifetimes::i lifetime))
+              (ret i))))
+      ...  =>
+        (if (< param-index (len param-regs::type))
+          param-index
+         else
+          unit)))
 
   (match reg-index
-    unit => { 'name': (get-stack-loc type stack-size) 'index': unit }
-    ...  => { 'name': regs::type::reg-index::'name' 'index': reg-index }))
+    unit => { 'name': (get-stack-loc type stack-size is-param) 'index': unit }
+    ...  => { 'name': final-regs::type::reg-index::'name' 'index': reg-index }))
 
 (let set-var-loc \meta name regs param-regs get-stack-loc ->
   (let var meta::0::'vars'::name)
@@ -36,14 +53,26 @@
   (let ref-target var::'ref-target')
   (let type var::'type'::'type')
   (let size TYPE-SIZE-MAP::(do var::'type'::'type'))
+  (let param-index meta::0::'vars'::name::'param-index')
+  (let is-param (not-unit? param-index))
+  (let stack-offset
+    (if is-param
+      meta::0::'params-stack-size'
+     else
+      (+ meta::0::'stack-size' size)))
   (let loc (get-var-loc lifetime type ref-target meta::0
-                        regs param-regs meta::1 (+ meta::0::'stack-size' size)
-                        get-stack-loc))
+                        regs param-regs meta::1 stack-offset
+                        get-stack-loc param-index))
+
   (set meta::0::'vars'::name::'loc' loc::'name')
   (set meta::0::'vars'::name::'loc-index' loc::'index')
   (if (unit? loc::'index')
-    (set meta::0::'stack-size' (+ meta::0::'stack-size' size))
-    (set meta::0::'vars'::name::'stack-offset' meta::0::'stack-size')
+    (if is-param
+      (set meta::0::'vars'::name::'stack-offset' meta::0::'params-stack-size')
+      (set meta::0::'params-stack-size' (+ meta::0::'params-stack-size' size))
+     else
+      (set meta::0::'stack-size' (+ meta::0::'stack-size' size))
+      (set meta::0::'vars'::name::'stack-offset' meta::0::'stack-size'))
    else
     (if (unit? meta::1::(do loc::'index'))
       (set meta::1::(do loc::'index') [lifetime])
@@ -67,14 +96,6 @@
   (fold
     \meta var-indexed ->
       (let name var-indexed::0::'name')
-      (let type meta::0::'vars'::name::'type'::'type')
-      (match meta::0::'vars'::name::'param-index'
-        unit => (set-var-loc meta name regs param-regs get-stack-loc)
-        ...  =>
-          (do
-            (set
-              meta::0::'vars'::name::'loc'
-              param-regs::type::(do meta::0::'vars'::name::'param-index'))
-            meta)) <>
+      (set-var-loc meta name regs param-regs get-stack-loc) <>
     [meta {}]
     indexed)::0)

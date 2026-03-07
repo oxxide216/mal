@@ -1,61 +1,116 @@
 (use 'defs')
 
-(let init-param-types \params ->
-  (map \param -> param::'type' <> params))
+(let init-type \expr log ->
+  (match expr::'type'
+    '&'   =>
+      (do
+        (let value (init-type expr::'value'::'type' log))
+        [
+          value::0
+          {
+            'type': TYPE-PTR
+            'value': value::1
+          }
+        ])
+    ... =>
+      (do
+        (let type TYPES-MAP::(do expr::'type'))
+        (if (unit? type)
+          (if log
+            (error 'Unknown type: ' expr::'type'))
+          [
+            true
+            {
+              'type': TYPE-UNIT
+              'value': unit
+            }
+          ]
+         else
+          [
+            false
+            {
+              'type': type
+              'value': unit
+            }
+          ]))))
+
+(let init-param-types \params log ->
+  (fold
+    \result param ->
+      (let type (init-type param::'type' log))
+      {
+        'types': (after result::'types' type::1)
+        'has-errors': (or result::'has-errors' type::0)
+      } <>
+    { 'types': [] 'has-errors': false }
+    params))
 
 (let init-basic-meta \proc ->
+  (let param-types (init-param-types proc::'params' true))
+  (let return-type (init-type proc::'return-type' true))
+
   {
     'name': proc::'name'
-    'param-types': (init-param-types proc::'params')
-    'return-type': proc::'return-type'
+    'param-types': param-types::'types'
+    'return-type': return-type::1
+    'has-errors': (or param-types::'has-errors' return-type::0)
   })
 
 (let init-meta \proc ->
+  (let param-types (init-param-types proc::'params' true))
+  (let return-type (init-type proc::'return-type' true))
+
   {
     'name': proc::'name'
-    'param-types':
-      (map
-        \param -> param::'type' <>
-        proc::'params')
-    'return-type': proc::'return-type'
+    'param-types': param-types::'types'
+    'return-type': return-type::1
+    'has-errors': (or param-types::'has-errors' return-type::0)
     'vars': {}
     'called-procs': []
     'str-ids': {}
     'strs-count': 0
     'stack-size': 0
+    'params-stack-size': 0
   })
 
-(let init-meta-gen \ir proc ->
+(let init-meta-gen \ir meta ->
+
   {
     'ir': ir
-    'meta': (init-meta proc)
+    'meta': meta
     'arg-types': []
     'return-type': unit
   })
 
-(let proc-signature-eq \proc name param-types ->
-  (and (== proc::'name' name)
-       (== (init-param-types proc::'params') param-types)))
-
 (let get-proc \ir name param-types ->
   (let procs
     (filter
-      \item -> (or (== item::'type' ITEM-PROC-DEF)
-                   (== item::'type' ITEM-EXTERN-PROC-DECL)) <>
+      \item ->
+        (or (== item::'type' ITEM-PROC-DEF)
+            (== item::'type' ITEM-EXTERN-PROC-DECL)) <>
       ir))
+
   (let results
     (filter
-      \proc -> (proc-signature-eq proc name param-types) <>
+      \proc ->
+        (== proc::'name' name) <>
       procs))
-  (match results
-    []  => unit
-    ... => results::0))
+
+  (let final-results
+    (filter
+      \proc ->
+        (== (init-param-types proc::'params' false)::'types' param-types) <>
+      results))
+
+  (match final-results
+    []  => results
+    ... => final-results::0))
 
 (let get-bin-op-dest-type \gen op args ->
   (if (!= gen::'arg-types'::0
           gen::'arg-types'::1)
     (error 'Operand types mismatch')
-    (set gen::'has-errors' true))
+    (set gen::'meta'::'has-errors' true))
 
   [gen::'arg-types'::0 gen])
 
@@ -64,7 +119,7 @@
           (== op OP-DEREF))
     (if (!= args::0::'type' ARG-VAR)
       (error 'Only variable can be referenced')
-      (set gen::'has-errors' true)
+      (set gen::'meta'::'has-errors' true)
      elif (== op OP-REF)
       (let name args::0::'value')
       (set gen::'meta'::'vars'::name::'ref-target' true)))
@@ -76,7 +131,7 @@
         (set gen::'meta'::'vars'::name::'ref-target' true)
         (if (!= args::0::'type' ARG-VAR)
           (error 'Only variable can be referenced')
-          (set gen::'has-errors' true))
+          (set gen::'meta'::'has-errors' true))
         [
           {
             'type': TYPE-PTR
@@ -88,32 +143,31 @@
       (do
         (if (!= gen::'arg-types'::0::'type' TYPE-PTR)
           (error 'Only pointer can be dereferenced')
-          (set gen::'has-errors' true))
+          (set gen::'meta'::'has-errors' true))
         (if (!= args::0::'type' ARG-VAR)
           (error 'Only variable can be dereferenced')
-          (set gen::'has-errors' true))
+          (set gen::'meta'::'has-errors' true))
         [gen::'arg-types'::0::'value' gen])
     ...      => [gen::'arg-types'::0 gen]))
 
 (let gen-meta-call \gen instr ->
   (let callee (get-proc gen::'ir' instr::'func' gen::'arg-types'))
-  (if (unit? callee)
-    (let signature (join (map type-to-str gen::'arg-types') ', ') )
-    (error 'Procedure ' instr::'func' '(' signature ') was not defined before usage')
-    (set gen::'has-errors' true)
+  (if (list? callee)
+    (let param-types (join (map type-to-str gen::'arg-types') ', ') )
+    (let signature (join [instr::'func' '(' param-types ')'] ''))
+    (error 'Procedure ' signature ' was not defined before usage')
+    (info 'Available procedures with this name:')
+    (for proc in callee
+      (let param-types (join (map type-to-str proc::'meta'::'param-types') ', '))
+      (let signature (join [proc::'name' '(' param-types ')'] ''))
+      (println '         ' signature))
+    (set gen::'meta'::'has-errors' true)
    else
     (set gen::'meta'::'called-procs' (after gen::'meta'::'called-procs' callee))
     (set gen::'return-type' callee::'return-type'))
   gen)
 
 (let gen-meta-arg \gen arg index ->
-  (if arg::'cast'
-    (ret
-      (with
-        gen
-        'arg-types'
-        (after gen::'arg-types' arg::'cast'))))
-
   (let type
     (match arg::'type'
       ARG-INT    => {
@@ -137,7 +191,7 @@
 
           (if (unit? gen::'meta'::'vars'::name)
             (error 'Symbol ' name ' was not defined before usage')
-            (set gen::'has-errors' true)
+            (set gen::'meta'::'has-errors' true)
             {
               'type': TYPE-UNIT
               'value': unit
@@ -148,16 +202,45 @@
             (set gen::'meta'::'vars'::name::'end' index)
             gen::'meta'::'vars'::name::'type'))))
 
+  (if arg::'cast'
+    (let new-type (init-type arg::'cast' true))
+    (if (not (can-cast? type new-type::1))
+      (error
+        'Cannot cast '
+        (type-to-str type)
+        ' -> '
+        (type-to-str new-type::1))
+      (set gen::'meta'::'has-errors' true))
+    (set gen::'meta'::'has-errors' (or gen::'meta'::'has-errors' new-type::0))
+    (ret (with gen 'arg-types' (after gen::'arg-types' new-type::1))))
+
   (with
     gen
     'arg-types'
     (after gen::'arg-types' type)))
 
+(let create-dest-var \gen type instr index ->
+  (let name instr::'dest')
+  (if gen::'meta'::'vars'::name
+    (error 'Symbol ' name ' was redefined')
+    (set gen::'meta'::'has-errors' true))
+  (set
+    gen::'meta'::'vars'::name
+    {
+      'type': type
+      'uses': 0
+      'begin': index
+      'end': index
+      'param-index': unit
+      'ref-target': false
+    })
+  gen)
+
 (let use-dest-var \gen instr index ->
   (let name instr::'dest')
   (if (unit? gen::'meta'::'vars'::name)
     (error 'Symbol ' name ' was not defined before usage')
-    (set gen::'has-errors' true)
+    (set gen::'meta'::'has-errors' true)
    else
     (set gen::'meta'::'vars'::name::'uses'
          (+ gen::'meta'::'vars'::name::'uses' 1))
@@ -176,52 +259,29 @@
   (match instr::'type'
     INSTR-RETURN      =>
       (if (!= gen::'arg-types'::0 gen::'meta'::'return-type')
-        (error gen::'meta'::'name' ': unexpected return type')
-        (set gen::'has-errors' true))
+        (error gen::'meta'::'name'
+               ': unexpected return type: '
+               (type-to-str gen::'arg-types'::0)
+               ', expected '
+               (type-to-str gen::'meta'::'return-type'))
+        (set gen::'meta'::'has-errors' true))
     INSTR-ASSIGN      =>
       (if instr::'let'
-        (set
-          gen::'meta'::'vars'::(do instr::'dest')
-          {
-            'type': gen::'arg-types'::0
-            'uses': 0
-            'begin': index
-            'end': index
-            'param-index': unit
-            'ref-target': false
-          })
+        (set gen (create-dest-var gen gen::'arg-types'::0 instr index))
        else
         (set gen (use-dest-var gen instr index)))
     INSTR-BIN-OP      =>
       (if instr::'let'
         (let result (get-bin-op-dest-type gen instr::'op' instr::'args'))
         (set gen result::1)
-        (set
-          gen::'meta'::'vars'::(do instr::'dest')
-          {
-            'type': result::0
-            'uses': 0
-            'begin': index
-            'end': index
-            'param-index': unit
-            'ref-target': false
-          })
+        (set gen (create-dest-var gen result::0 instr index))
        else
         (set gen (use-dest-var gen instr index)))
     INSTR-UN-OP       =>
       (if instr::'let'
         (let result (get-un-op-dest-type gen instr::'op' instr::'args'))
         (set gen result::1)
-        (set
-          gen::'meta'::'vars'::(do instr::'dest')
-          {
-            'type': result::0
-            'uses': 0
-            'begin': index
-            'end': index
-            'param-index': unit
-            'ref-target': false
-          })
+        (set gen (create-dest-var gen result::0 instr index))
        else
         (set gen (use-dest-var gen instr index)))
     INSTR-CALL        =>
@@ -230,16 +290,7 @@
       (do
         (set gen (gen-meta-call gen instr))
         (if instr::'let'
-          (set
-            gen::'meta'::'vars'::(do instr::'dest')
-            {
-              'type': gen::'return-type'
-              'uses': 0
-              'begin': index
-              'end': index
-              'param-index': unit
-              'ref-target': false
-            })
+          (set gen (create-dest-var gen gen::'return-type' instr index))
          else
           (set gen (use-dest-var gen instr index)))))
 
@@ -258,20 +309,35 @@
     })
   gen)
 
-(let gen-meta-item \ir item ->
+(let gen-meta-item-basic \ir item ->
   (match item::'type'
     ITEM-PROC-DEF         =>
       (do
         (let params-indexed (zip item::'params' (gen-range 0 (len item::'params'))))
-        (let body-indexed (zip item::'body' (gen-range 0 (len item::'body'))))
-        (let gen (fold gen-meta-param (init-meta-gen ir item) params-indexed))
-        (let result (fold gen-meta-instr gen body-indexed))
-        (if result::'has-errors'
+        (let gen (fold gen-meta-param (init-meta-gen ir (init-meta item)) params-indexed))
+        (if gen::'meta'::'has-errors'
           (exit 1))
-        (with item 'meta' result::'meta'))
+        (with item 'meta' gen::'meta'))
     ITEM-EXTERN-PROC-DECL =>
       (do
-        (with item 'meta' (init-basic-meta item)))))
+        (let meta (init-basic-meta item))
+        (if meta::0
+          (exit 1))
+        (with item 'meta' meta::1))))
+
+(let gen-meta-item \ir item ->
+  (match item::'type'
+    ITEM-PROC-DEF         =>
+      (do
+        (let body-indexed (zip item::'body' (gen-range 0 (len item::'body'))))
+        (let gen (init-meta-gen ir item::'meta'))
+        (let result (fold gen-meta-instr gen body-indexed))
+        (if result::'meta'::'has-errors'
+          (exit 1))
+        (with item 'meta' result::'meta'))
+    ITEM-EXTERN-PROC-DECL => item::'meta'))
 
 (let gen-meta \ir ->
-  (filter not-unit? (map \item -> (gen-meta-item ir item) <> ir)))
+  (let first-pass (filter not-unit? (map \item -> (gen-meta-item-basic ir item) <> ir)))
+  (let second-pass (map \item -> (gen-meta-item first-pass item) <> first-pass))
+  second-pass)

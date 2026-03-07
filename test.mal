@@ -3,7 +3,7 @@ struct svec2
   y: s32
 end
 
-proc main() -> u8
+proc main(argc: u32, argv: &&u8) -> u8
   let str0 = "Hello, World!\n"
   let str1 = "Foo, Bar!\n"
   let str2 = "Bazz!\n"

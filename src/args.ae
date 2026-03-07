@@ -77,7 +77,7 @@
           (error 'Unknown debug output mode')
           (info 'Available debug output modes:')
           (for mode in DEBUG-OUTPUT-MAP
-            (info (+ '  ' mode::'key')))
+            (println (+ '        ' mode::'key')))
           (exit 1))
         (with (parse-args (from args 2))
               'debug-output'

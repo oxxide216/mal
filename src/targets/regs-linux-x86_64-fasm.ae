@@ -39,39 +39,39 @@
 ])
 
 (let LINUX-x86_64-FASM-PROC-PARAM-REGS-INT64 [
-  'rdi'
-  'rsi'
-  'rdx'
-  'rcx'
-  'r8'
-  'r9'
+  { 'name': 'rdi' }
+  { 'name': 'rsi' }
+  { 'name': 'rdx' }
+  { 'name': 'rcx' }
+  { 'name': 'r8'  }
+  { 'name': 'r9'  }
 ])
 
 (let LINUX-x86_64-FASM-PROC-PARAM-REGS-INT32 [
-  'edi'
-  'esi'
-  'edx'
-  'ecx'
-  'r8d'
-  'r9d'
+  { 'name': 'edi' }
+  { 'name': 'esi' }
+  { 'name': 'edx' }
+  { 'name': 'ecx' }
+  { 'name': 'r8d' }
+  { 'name': 'r9d' }
 ])
 
 (let LINUX-x86_64-FASM-PROC-PARAM-REGS-INT16 [
-  'di'
-  'si'
-  'dx'
-  'cx'
-  'r8w'
-  'r9w'
+  { 'name': 'di'  }
+  { 'name': 'si'  }
+  { 'name': 'dx'  }
+  { 'name': 'cx'  }
+  { 'name': 'r8w' }
+  { 'name': 'r9w' }
 ])
 
 (let LINUX-x86_64-FASM-PROC-PARAM-REGS-INT8 [
-  'dil'
-  'sil'
-  'dl'
-  'cl'
-  'r8b'
-  'r9b'
+  { 'name': 'dil' }
+  { 'name': 'sil' }
+  { 'name': 'dl'  }
+  { 'name': 'cl'  }
+  { 'name': 'r8b' }
+  { 'name': 'r9b' }
 ])
 
 (let LINUX-x86_64-FASM-GENERAL-REGS {

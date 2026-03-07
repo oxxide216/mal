@@ -174,7 +174,13 @@
     TYPE-U32
     TYPE-U64
     TYPE-PTR
-  ] type))
+  ] type::'type'))
 
 (let can-cast? \a b ->
   (and (is-int? a) (is-int? b)))
+
+(macro land \a b ->
+  (let a-result a)
+  (match a-result
+    false => false
+    ...   => b))

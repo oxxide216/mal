@@ -7,6 +7,8 @@
     'section \'.text\' executable\n'
     'public _start\n'
     '_start:\n'
+    '  pop rdi\n'
+    '  pop rsi\n'
     '  call main\n'
     '  mov rdi,rax\n'
     '  mov rax,60\n'
@@ -62,9 +64,14 @@
     ARG-VAR    =>
       (do
         (let var meta::'vars'::(do arg::'value'))
+        (let is-param (not-unit? var::'param-index'))
         (match var::'loc-index'
-          unit => (get-stack-loc-linux-x86_64-fasm type var::'stack-offset')
-          ...  => LINUX-x86_64-FASM-GENERAL-REGS::type::(do var::'loc-index')::'name'))))
+          unit => (get-stack-loc-linux-x86_64-fasm type var::'stack-offset' is-param)
+          ...  =>
+            (if is-param
+              LINUX-x86_64-FASM-PROC-PARAM-REGS::type::(do var::'loc-index')::'name'
+             else
+              LINUX-x86_64-FASM-GENERAL-REGS::type::(do var::'loc-index')::'name')))))
 
 (let is-on-stack? \arg meta ->
   (match arg::'type'
@@ -107,7 +114,6 @@
       ] '')))
 
 (let get-arg-type-type \arg meta ->
-  (println arg::'cast')
   (match arg::'type'
     ARG-INT    => TYPE-S32
     ARG-STRING => TYPE-PTR
@@ -132,7 +138,7 @@
             ARG-STRING =>
               (join [
                 '  lea '
-                LINUX-x86_64-FASM-PROC-PARAM-REGS::type::index
+                LINUX-x86_64-FASM-PROC-PARAM-REGS::type::index::'name'
                 ',['
                 loc
                 ']\n'
@@ -140,7 +146,7 @@
             ...        =>
               (join [
                 '  mov '
-                LINUX-x86_64-FASM-PROC-PARAM-REGS::type::index
+                LINUX-x86_64-FASM-PROC-PARAM-REGS::type::index::'name'
                 ','
                 loc
                 '\n'
@@ -605,14 +611,16 @@
       \entry ->
         {
           'loc-index': entry::'value'::'loc-index'
+          'loc': entry::'value'::'loc'
           'type': entry::'value'::'type'::'type'
-          'is-param': (not-unit? entry::'value'::'param-index')
+          'param-index': entry::'value'::'param-index'
+          'ref-target': entry::'value'::'ref-target'
         } <>
       proc::'meta'::'vars'))
 
   (let non-param-vars
     (filter
-      \var -> (not var::'is-param') <>
+      \var -> (unit? var::'param-index') <>
       vars))
 
   (let unique-vars
@@ -624,13 +632,22 @@
       {}
       non-param-vars))
 
+  (let moved-param-vars
+    (filter
+      \var ->
+        (land (not-unit? var::'param-index')
+              (and var::'ref-target'
+                   (< var::'param-index'
+                       (len LINUX-x86_64-FASM-PROC-PARAM-REGS::(do var::'type'))))) <>
+      vars))
+
   (let begin-asm
     (map
       \entry ->
         (proc-segment-var-gen-asm-linux-x86_64-fasm
           entry::'key'
           entry::'value'::'type'
-          entry::'value'::'is-param'
+          (not-unit? entry::'value'::'param-index')
           false) <>
       unique-vars))
 
@@ -659,13 +676,30 @@
      else
       actual-begin-asm0))
 
+  (let actual-begin-asm2
+    (+
+      actual-begin-asm1
+      (map
+        \var ->
+          (let type var::'type')
+          (let index var::'param-index')
+          (join [
+            '  mov '
+            var::'loc'
+            ','
+            LINUX-x86_64-FASM-PROC-PARAM-REGS::type::index::'name'
+            '\n'] '') <>
+        moved-param-vars)))
+
+  (println actual-begin-asm2)
+
   (let end-asm
     (map
       \entry ->
         (proc-segment-var-gen-asm-linux-x86_64-fasm
           entry::'key'
           entry::'value'::'type'
-          entry::'value'::'is-param'
+          (not-unit? entry::'value'::'param-index')
           true) <>
       unique-vars))
   (let end-asm-reversed (reverse end-asm))
@@ -697,7 +731,7 @@
   (join
     (+ ['public ' proc::'name' '\n' proc::'name' ':\n']
        (after
-         (+ actual-begin-asm1
+         (+ actual-begin-asm2
          (+ gen-with-body-asm::1
             (before '.end:\n'
                     actual-end-asm1))) '  ret\n'))
@@ -756,9 +790,9 @@
       meta::'str-ids')
     ''))
 
-(let get-stack-loc-linux-x86_64-fasm \type offset ->
+(let get-stack-loc-linux-x86_64-fasm \type offset is-param ->
   (join [(get-ptr-prefix-linux-x86_64-fasm type)
-         '[rbp-' (to-str offset) ']'] ''))
+         '[rbp' (if is-param '+' else '-') (to-str offset) ']'] ''))
 
 (let proc-alloc-regs-linux-x86_64-fasm \item ->
   (match item::'type'
