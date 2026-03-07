@@ -107,7 +107,12 @@
     (lex-while
       \char -> (!= char '\n'))))
 
-(let lex-int (lex-while is-number))
+(let lex-int
+  (lex-seq [
+    (lex-opt
+      (lex-lit '-'))
+    (lex-while is-number)
+  ]))
 
 (let lex-string-internal
   (lex-seq [

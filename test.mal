@@ -19,7 +19,7 @@ proc main() -> u8
     print("In a loop!\n", 11)
     i = i + 1
   end
-  let a = 5
+  let a = -5
   let r = &a
   *r = 2
   let b = *r
