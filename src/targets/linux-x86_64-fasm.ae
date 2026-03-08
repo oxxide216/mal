@@ -112,7 +112,7 @@
     (let prefix (get-ptr-prefix-linux-x86_64-fasm type::'type'))
     (let return-loc LINUX-x86_64-FASM-RETURN-REG::(do type::'type'))
     (if (not-unit? dest-stack-offset)
-      (join ['  lea ' return-loc ',' prefix '[' return-loc ']\n'
+      (join ['  lea ' return-loc ',' prefix '[' arg-loc ']\n'
              '  mov ' dest-loc ',' return-loc '\n'] '')
      elif deref
       (join ['  lea ' return-loc ',' prefix '[' arg-loc ']\n'
@@ -969,7 +969,7 @@
           (to-str str::'value')
           ': db '
           (str-to-bytes (escape-str str::'key'))
-          '\n'
+          ',0\n'
         ] '') <>
       meta::'str-ids')
     ''))
