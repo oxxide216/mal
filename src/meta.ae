@@ -118,8 +118,9 @@
     ... => final-results::0))
 
 (let get-bin-op-dest-type \gen op args ->
-  (if (!= gen::'arg-types'::0
-          gen::'arg-types'::1)
+  (if (and (!= gen::'arg-types'::0
+               gen::'arg-types'::1)
+           (!= gen::'arg-types'::0::'type' TYPE-PTR))
     (error 'Operand types mismatch')
     (set gen::'meta'::'has-errors' true))
 
