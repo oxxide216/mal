@@ -35,6 +35,7 @@
 (let TT-AS         (count))
 (let TT-STRUCT     (count))
 (let TT-LET        (count))
+(let TT-USE        (count))
 (let TT-IDENT      (count))
 (let TT-OPAREN     (count))
 (let TT-CPAREN     (count))

@@ -437,12 +437,19 @@
     (skip-token TT-END)
   ]))
 
+(let parse-use \->
+  (parse-node 'use' [
+    (skip-token TT-USE)
+    (name-token TT-STRING 'file-path')
+  ]))
+
 (let parse-program \->
   (parse-list 'program'
     (parse-select [
       (parse-proc-def)
       (parse-extern-proc-decl)
       (parse-struct)
+      (parse-use)
     ])))
 
 (let parse \tokens ->

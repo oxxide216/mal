@@ -24,6 +24,7 @@
   'libc': false
   'temp-dir': '/tmp'
   'link-args': []
+  'include-paths': ['.']
 })
 
 (let print-usage \->
@@ -34,7 +35,8 @@
          '  --debug [TYPE]            output debug information of [TYPE].\n'
          '  --libc                    link with libc.\n'
          '  --temp [DIR]              output temporary files into [DIR].\n'
-         '  -l[FLAG] -L[FLAG]         linker flags.\n')
+         '  -l[FLAG] -L[FLAG]         linker flags.\n'
+         '  -i [PATH]                 add include path.\n')
   (exit 0))
 
 (let parse-args \args ->
@@ -89,11 +91,20 @@
     '--temp' =>
       (do
         (if (< (len args) 2)
-          (error '-temp flag requires an argument')
+          (error '--temp flag requires an argument')
           (exit 1))
         (with (parse-args (from args 2))
               'temp-dir'
               args::1))
+    '-i' =>
+      (do
+        (if (< (len args) 2)
+          (error '-i flag requires an argument')
+          (exit 1))
+        (let parsed-args (parse-args (from args 2)))
+        (with parsed-args
+              'include-paths'
+              (after parsed-args::'include-paths' args::1)))
     ... =>
       (if (or (begins-with (head args) '-l') (begins-with (head args) '-L'))
         (let parsed-args (parse-args (from args 1)))

@@ -328,7 +328,12 @@
    else
     [result labels]))
 
-(let gen-ir-item \instr last ->
+(let get-file-dir \path ->
+  (let list (split path '/'))
+  (let dir (get-range list 0 (- (len list) 1)))
+  (join dir '/'))
+
+(let gen-ir-item \instr last include-paths ->
   (match instr::'tag'
     'proc-def' => [
       {
@@ -380,7 +385,27 @@
               } <>
             instr::'fields')
       }
-    ]))
+    ]
+    'use' =>
+      (do
+        (let file-path instr::'file-path')
+        (let clamped
+          (get-range file-path 1 (- (len file-path) 1)))
+        (let code
+          (for path in include-paths
+            (let code (read-file (join [path '/' clamped '.mal'] '')))
+            (if (not-unit? code)
+              (ret code))))
+
+        (if (unit? code)
+          (error 'File \'' clamped '.mal\' was not found')
+          (exit 1))
+
+        (let tokens (lex code))
+        (let ast (parse tokens))
+        (let ir (gen-ir ast clamped include-paths))
+
+        ir)))
 
 (let gen-ir-instrs \instrs last labels ->
   (match (len instrs)
@@ -392,11 +417,25 @@
         (let rec (gen-ir-instrs (from instrs 1) last result::1))
         [(+ result::0 rec::0) rec::1])))
 
-(let gen-ir-items \items ->
+(let gen-ir-items \items include-paths ->
   (match (len items)
     0   => []
-    1   => (gen-ir-item items::0 true)
-    ... => (+ (gen-ir-item items::0 false) (gen-ir-items (from items 1)))))
+    1   => (gen-ir-item items::0 true include-paths)
+    ... => (+ (gen-ir-item items::0 false include-paths)
+              (gen-ir-items (from items 1) include-paths))))
 
-(let gen-ir \program ->
-  (gen-ir-items program::'items'))
+(let gen-ir \program path include-paths ->
+  (let new-include-paths
+    (filter not-unit?
+      (map
+        \item ->
+          (if (== item::'tag' 'use')
+            (let file-path item::'file-path')
+            (let clamped (get-range file-path 1 (- (len file-path) 1)))
+            (join [(get-file-dir path) (get-file-dir clamped)] '/')
+           else
+            unit) <>
+        program::'items')))
+  (gen-ir-items
+    program::'items'
+    (+ include-paths new-include-paths)))

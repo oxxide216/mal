@@ -29,7 +29,10 @@
 (if (== config::'debug-output' DEBUG-OUTPUT-AST)
   (println ast))
 
-(let ir (gen-ir ast))
+(let dir (get-file-dir config::'args'::0))
+(let include-paths (after config::'include-paths' dir))
+
+(let ir (gen-ir ast config::'args'::0 include-paths))
 (if (== config::'debug-output' DEBUG-OUTPUT-IR)
   (println ir))
 

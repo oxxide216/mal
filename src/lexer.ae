@@ -203,6 +203,7 @@
   'as':     TT-AS
   'struct': TT-STRUCT
   'let':    TT-LET
+  'use':    TT-USE
 })
 
 (let lexx \lexer ->
