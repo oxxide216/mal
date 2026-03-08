@@ -299,11 +299,7 @@
       ''))
   (let add
     (if (> stack-usage 0)
-      (join [
-        '  add rsp,'
-        (to-str stack-usage)
-        '\n'
-      ] '')
+      (join ['  add rsp,' (to-str stack-usage) '\n'] '')
      else
       ''))
   (let hash
@@ -969,8 +965,8 @@
       +
       0
       (map
-        \param -> (hash (to-str param::'type')) <>
-        proc::'params')))
+        \type -> (hash (to-str type)) <>
+        proc::'meta'::'param-types')))
 
   (let name (+ proc::'name' (to-str (abs hash))))
 
@@ -1056,6 +1052,25 @@
           get-stack-loc-linux-x86_64-fasm))
     ...           => item))
 
+(let gen-main-asm-linux-x86_64-fasm \items ->
+  (let main-proc
+    (for item in items
+      (if (and (== item::'type' ITEM-PROC-DEF)
+               (== item::'name' 'main'))
+        (ret item))))
+
+  (let hash
+    (fold
+      +
+      0
+      (map
+        \type -> (hash (to-str type)) <>
+        main-proc::'meta'::'param-types')))
+
+  (let name (+ main-proc::'name' (to-str (abs hash))))
+
+  (join ['main:\n  call ' name '\n'] ''))
+
 (let gen-asm-linux-x86_64-fasm \ir gen-start ->
   (let full-items (map proc-alloc-regs-linux-x86_64-fasm ir::'items'))
   (let full-proc-defs (filter \item -> (== item::'type' ITEM-PROC-DEF) <> full-items))
@@ -1071,11 +1086,14 @@
       full-proc-defs))
 
   (join
-    (before
-      (if gen-start
-        LINUX-x86_64-FASM-ASM-BEGIN-WITH-START
-       else
-        LINUX-x86_64-FASM-ASM-BEGIN-WITHOUT-START)
+    (+
+      [
+        (if gen-start
+          LINUX-x86_64-FASM-ASM-BEGIN-WITH-START
+         else
+          LINUX-x86_64-FASM-ASM-BEGIN-WITHOUT-START)
+        (gen-main-asm-linux-x86_64-fasm ir::'items')
+      ]
       (+
         code-asm
         (before

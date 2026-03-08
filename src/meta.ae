@@ -470,10 +470,13 @@
     allowed))
 
 (let gen-meta \ir ->
+  (let main-proc
+    (for item in ir
+      (if (and (== item::'type' ITEM-PROC-DEF)
+               (== item::'name' 'main'))
+        (ret item))))
+
   (let types (gen-types ir))
-  (for type in types
-    (if type::'has-errors'
-      (exit 1)))
 
   (let first-pass
     (filter
@@ -481,6 +484,15 @@
       (map \item -> (gen-meta-item-basic types ir item) <>
       ir)))
   (let second-pass (map \item -> (gen-meta-item types first-pass item) <> first-pass))
+
+  (if (unit? main-proc)
+    (error 'Program should containt \'main\' procedure')
+    (exit 1))
+
+  (for type in types
+    (if type::'has-errors'
+      (exit 1)))
+
   (for item in second-pass
     (if item::'meta'::'has-errors'
       (exit 1)))

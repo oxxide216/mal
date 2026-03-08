@@ -443,7 +443,6 @@
     1   => (gen-ir-item items::0 true include-paths included-files)
     ... =>
       (do
-        (println included-files)
         (let result (gen-ir-item items::0 false include-paths included-files))
         (let rec (gen-ir-items (from items 1) include-paths result::1))
         [(+ result::0 rec::0) rec::1])))
