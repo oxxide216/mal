@@ -208,28 +208,34 @@
     false))
 
 (let get-arg-type \arg meta ->
-  (match arg::'type'
-    ARG-INT    => {
-      'type': TYPE-S32
-      'value': unit
-    }
-    ARG-STRING => {
-      'type': TYPE-PTR
-      'value': {
-        'type': TYPE-U8
+  (let type
+    (match arg::'type'
+      ARG-INT    => {
+        'type': TYPE-S32
         'value': unit
       }
-    }
-    ARG-VAR    =>
-      meta::'vars'::(do arg::'value')::'type'
-    ARG-MEMBER =>
-      (do
-        (let struct-var meta::'vars'::(do arg::'value'::'struct'))
-        (let fields struct-var::'type'::'value'::'fields')
+      ARG-STRING => {
+        'type': TYPE-PTR
+        'value': {
+          'type': TYPE-U8
+          'value': unit
+        }
+      }
+      ARG-VAR    =>
+        meta::'vars'::(do arg::'value')::'type'
+      ARG-MEMBER =>
+        (do
+          (let struct-var meta::'vars'::(do arg::'value'::'struct'))
+          (let fields struct-var::'type'::'value'::'fields')
 
-        (for field in fields
-          (if (== field::'name' arg::'value'::'member')
-            (ret field)))::'type')))
+          (for field in fields
+            (if (== field::'name' arg::'value'::'member')
+              (ret field)))::'type')))
+
+  (if arg::'cast'
+    (init-type meta::'types' arg::'cast' false)::1
+   else
+    type))
 
 (let get-arg-type-type \arg meta ->
   (get-arg-type arg meta)::'type')
