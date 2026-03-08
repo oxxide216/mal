@@ -144,7 +144,6 @@
 (let lex-cparen    (lex-lit ')'))
 (let lex-ocurly    (lex-lit '{'))
 (let lex-ccurly    (lex-lit '}'))
-(let lex-assign    (lex-lit '='))
 (let lex-comma     (lex-lit ','))
 (let lex-colon     (lex-lit ':'))
 (let lex-arrow     (lex-lit '->'))
@@ -160,6 +159,7 @@
 (let lex-le        (lex-lit '<='))
 (let lex-gt        (lex-lit '>'))
 (let lex-ge        (lex-lit '>='))
+(let lex-assign    (lex-lit '='))
 (let lex-dot       (lex-lit '.'))
 
 (let lex-grammar [
@@ -172,7 +172,6 @@
   (new-grammar lex-cparen     TT-CPAREN)
   (new-grammar lex-ocurly     TT-OCURLY)
   (new-grammar lex-ccurly     TT-CCURLY)
-  (new-grammar lex-assign     TT-ASSIGN)
   (new-grammar lex-comma      TT-COMMA)
   (new-grammar lex-colon      TT-COLON)
   (new-grammar lex-arrow      TT-ARROW)
@@ -188,6 +187,7 @@
   (new-grammar lex-le         TT-LE)
   (new-grammar lex-gt         TT-GT)
   (new-grammar lex-ge         TT-GE)
+  (new-grammar lex-assign     TT-ASSIGN)
   (new-grammar lex-dot        TT-DOT)
 ])
 
