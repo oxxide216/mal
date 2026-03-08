@@ -1,3 +1,5 @@
+(use 'std/math')
+
 (use 'regs-linux-x86_64-fasm')
 (use 'alloc')
 
@@ -304,10 +306,17 @@
       ] '')
      else
       ''))
+  (let hash
+    (fold
+      +
+      0
+      (map
+        \arg -> (hash (to-str (get-arg-type arg meta))) <>
+        instr::'args')))
   (join
     (+ (+ common-args-push
           args-with-stack-usage::'asm')
-       (+ [sub '  call ' instr::'func' '\n' add]
+       (+ [sub '  call ' (+ instr::'func' (to-str (abs hash))) '\n' add]
           common-args-pop))
     ''))
 
@@ -354,10 +363,17 @@
       (join ['  mov ' dest-var::'loc' ',' return-loc '\n'] '')
      else
       ''))
+  (let hash
+    (fold
+      +
+      0
+      (map
+        \arg -> (hash (to-str (get-arg-type arg meta))) <>
+        instr::'args')))
   (join
     (+ (+ common-args-push
           args-with-stack-usage::'asm')
-       (+ [lea sub '  call ' instr::'func' '\n' add mov]
+       (+ [lea sub '  call ' (+ instr::'func' (to-str (abs hash))) '\n' add mov]
           common-args-pop))
     ''))
 
@@ -948,8 +964,18 @@
      else
       actual-end-asm0))
 
+  (let hash
+    (fold
+      +
+      0
+      (map
+        \param -> (hash (to-str param::'type')) <>
+        proc::'params')))
+
+  (let name (+ proc::'name' (to-str (abs hash))))
+
   (join
-    (+ ['public ' proc::'name' '\n' proc::'name' ':\n']
+    (+ ['public ' name '\n' name ':\n']
        (after
          (+ actual-begin-asm2
          (+ (lor gen-with-body-asm::1 [])
@@ -958,9 +984,11 @@
     ''))
 
 (let extern-proc-gen-asm-linux-x86_64-fasm \proc ->
+  (let name proc::'name')
+
   (join [
-    'extrn \'' proc::'name' '\' as _' proc::'name' '\n'
-    proc::'name' ' = plt _' proc::'name' '\n'
+    'extrn \'' name '\' as _' name '\n'
+    name ' = plt _' name '\n'
   ] ''))
 
 (let item-gen-asm-linux-x86_64-fasm \item ir ->
