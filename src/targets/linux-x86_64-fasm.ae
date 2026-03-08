@@ -1075,7 +1075,7 @@
 
   (let name (+ main-proc::'name' (to-str (abs hash))))
 
-  (join ['main:\n  call ' name '\n'] ''))
+  (join ['main:\n  call ' name '\n  ret\n'] ''))
 
 (let gen-asm-linux-x86_64-fasm \ir gen-start ->
   (let full-items (map proc-alloc-regs-linux-x86_64-fasm ir::'items'))
