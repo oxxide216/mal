@@ -172,6 +172,7 @@
 (let lex-le        (lex-lit '<='))
 (let lex-gt        (lex-lit '>'))
 (let lex-ge        (lex-lit '>='))
+(let lex-dot       (lex-lit '.'))
 
 (let lex-grammar [
   (new-grammar lex-whitespace TT-WHITESPACE)
@@ -210,6 +211,7 @@
   (new-grammar lex-le         TT-LE)
   (new-grammar lex-gt         TT-GT)
   (new-grammar lex-ge         TT-GE)
+  (new-grammar lex-dot        TT-DOT)
 ])
 
 (let lexx \lexer ->

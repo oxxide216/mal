@@ -13,11 +13,11 @@ proc svec2_add(a: svec2, b: svec2) -> svec2
   retval c
 end
 
-proc main(argc: u32, argv: &&u8) -> u8
-  let vec = svec2s(2)
+proc main(argc: u32, argv: &&u8) -> s32
   let str0 = "Hello, World!\n"
   let str1 = "Foo, Bar!\n"
   let str2 = "Bazz!\n"
+
   if 0 != 0
     print(str0, 14)
   elif 1 == 1
@@ -25,17 +25,24 @@ proc main(argc: u32, argv: &&u8) -> u8
   else
     print(str1, 10)
   end
+
   let i = 0
   while i < 10
     print("In a loop!\n", 11)
     i = i + 1
   end
+
   let a = -5
   let r = &a
   *r = 2
   let b = *r
   let c = a + b
-  retval c as u8
+
+  let vec = svec2s(2)
+  vec.y = 3
+  let result = vec.x + vec.y
+
+  retval result
 end
 
 proc var() -> s32

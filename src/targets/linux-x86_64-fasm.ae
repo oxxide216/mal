@@ -77,7 +77,34 @@
             (if is-param
               LINUX-x86_64-FASM-PROC-PARAM-REGS::type::(do var::'loc-index')::'name'
              else
-              LINUX-x86_64-FASM-GENERAL-REGS::type::(do var::'loc-index')::'name')))))
+              LINUX-x86_64-FASM-GENERAL-REGS::type::(do var::'loc-index')::'name')))
+    ARG-MEMBER =>
+      (do
+        (let struct-var meta::'vars'::(do arg::'value'::'struct'))
+        (let fields struct-var::'type'::'value'::'fields')
+
+        (let field-with-index
+          (for field-with-index in (zip fields (gen-range 0 (len fields)))
+            (if (== field-with-index::0::'name' arg::'value'::'member')
+              (ret field-with-index))))
+
+        (let field field-with-index::0)
+        (let index field-with-index::1)
+
+        (let prev (get-range fields 0 index))
+        (let sizes (map \field -> (get-type-size field::'type') <> prev))
+        (let relative-offset (fold + 0 sizes))
+
+        (let global-offset
+          (if struct-var::'is-param'
+            (+ struct-var::'stack-offset' relative-offset)
+           else
+            (- struct-var::'stack-offset' relative-offset)))
+
+        (get-stack-loc-linux-x86_64-fasm
+          field::'type'::'type'
+          global-offset
+          struct-var::'is-param'))))
 
 (let move-linux-x86_64-fasm \dest-loc dest-stack-offset arg type meta deref ->
   (let arg-loc (arg-gen-asm-type-linux-x86_64-fasm arg type::'type' meta))
@@ -192,7 +219,15 @@
       }
     }
     ARG-VAR    =>
-      meta::'vars'::(do arg::'value')::'type'))
+      meta::'vars'::(do arg::'value')::'type'
+    ARG-MEMBER =>
+      (do
+        (let struct-var meta::'vars'::(do arg::'value'::'struct'))
+        (let fields struct-var::'type'::'value'::'fields')
+
+        (for field in fields
+          (if (== field::'name' arg::'value'::'member')
+            (ret field)))::'type')))
 
 (let get-arg-type-type \arg meta ->
   (get-arg-type arg meta)::'type')
@@ -206,7 +241,7 @@
   (let alignment (% num amount))
   (- amount alignment))
 
-(let proc-params-gen-asm-linux-x86_64-fasm \params meta ->
+(let proc-params-gen-asm-linux-x86_64-fasm \params meta shift ->
   (fold
     \result param-indexed ->
       (let param param-indexed::0)
@@ -232,10 +267,10 @@
             (join ['  push ' loc '\n'] ''))))
       (with result 'asm' (after result::'asm' asm)) <>
   { 'asm': [] 'stack-usage': 0 }
-  (reverse (zip params (gen-range 0 (len params))))))
+  (reverse (zip params (gen-range shift (+ (len params) shift))))))
 
 (let call-gen-asm-linux-x86_64-fasm \instr meta ->
-  (let args-with-stack-usage (proc-params-gen-asm-linux-x86_64-fasm instr::'args' meta))
+  (let args-with-stack-usage (proc-params-gen-asm-linux-x86_64-fasm instr::'args' meta 0))
   (let alignment (get-alignment args-with-stack-usage::'stack-usage' 16))
   (let stack-usage (+ args-with-stack-usage::'stack-usage' alignment))
   (let sub
@@ -259,9 +294,20 @@
 
 (let call-assign-gen-asm-linux-x86_64-fasm \instr meta ->
   (let dest-var meta::'vars'::(do instr::'dest'))
-  (let args-with-stack-usage (proc-params-gen-asm-linux-x86_64-fasm instr::'args' meta))
+  (let params-shift
+    (if (== dest-var::'type'::'type' TYPE-STRUCT)
+      1
+     else
+      0))
+  (let args-with-stack-usage
+    (proc-params-gen-asm-linux-x86_64-fasm instr::'args' meta params-shift))
   (let alignment (get-alignment args-with-stack-usage::'stack-usage' 16))
   (let stack-usage (+ args-with-stack-usage::'stack-usage' alignment))
+  (let lea
+    (if (== dest-var::'type'::'type' TYPE-STRUCT)
+      (join ['  lea rdi,' dest-var::'loc' '\n'] '')
+     else
+      ''))
   (let sub
     (if (> alignment 0)
       (join ['  sub rsp,' (to-str alignment) '\n'] '')
@@ -269,26 +315,25 @@
       ''))
   (let add
     (if (> stack-usage 0)
-      (join [
-        '  add rsp,'
-        (to-str stack-usage)
-        '\n'
-      ] '')
+      (join ['  add rsp,' (to-str stack-usage) '\n'] '')
+     else
+      ''))
+  (let mov
+    (if (!= dest-var::'type'::'type' TYPE-STRUCT)
+      (let return-loc LINUX-x86_64-FASM-RETURN-REG::(do dest-var::'type'::'type'))
+      (join ['  mov ' dest-var::'loc' ',' return-loc '\n'] '')
      else
       ''))
   (join
     (+ args-with-stack-usage::'asm'
        [
+         lea
          sub
          '  call '
          instr::'func'
          '\n'
          add
-         '  mov '
-         dest-var::'loc'
-         ','
-         LINUX-x86_64-FASM-RETURN-REG::(do dest-var::'type'::'type')
-         '\n'
+         mov
       ])
     ''))
 
@@ -640,6 +685,42 @@
       instr::'args')::0
     ''))
 
+(let member-assign-gen-asm-linux-x86_64-fasm \instr meta ->
+  (let struct-var meta::'vars'::(do instr::'struct'))
+  (let fields struct-var::'type'::'value'::'fields')
+
+  (let field-with-index
+    (for field-with-index in (zip fields (gen-range 0 (len fields)))
+      (if (== field-with-index::0::'name' instr::'member')
+        (ret field-with-index))))
+
+  (let field field-with-index::0)
+  (let index field-with-index::1)
+
+  (let prev (get-range fields 0 index))
+  (let sizes (map \field -> (get-type-size field::'type') <> prev))
+  (let relative-offset (fold + 0 sizes))
+
+  (let global-offset
+    (if struct-var::'is-param'
+      (+ struct-var::'stack-offset' relative-offset)
+     else
+      (- struct-var::'stack-offset' relative-offset)))
+
+  (let dest-loc
+    (get-stack-loc-linux-x86_64-fasm
+      field::'type'::'type'
+      global-offset
+      struct-var::'is-param'))
+
+  (move-linux-x86_64-fasm
+    dest-loc
+    global-offset
+    instr::'args'::0
+    field::'type'
+    meta
+    false))
+
 (let instr-gen-asm-linux-x86_64-fasm \instr gen-asm ->
   (let gen gen-asm::0)
   (let asm
@@ -669,6 +750,7 @@
           (set gen::'scratch-reg-used' result::1)
           result::0)
       INSTR-MAKE-STRUCT   => (make-struct-gen-asm-linux-x86_64-fasm instr gen::'meta')
+      INSTR-MEMBER-ASSIGN => (member-assign-gen-asm-linux-x86_64-fasm instr gen::'meta')
       ...                 =>
         (do
           (error 'Unknown instr type: ' instr::'type')

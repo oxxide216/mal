@@ -57,6 +57,7 @@
 (let TT-LE         (count))
 (let TT-GT         (count))
 (let TT-GE         (count))
+(let TT-DOT        (count))
 
 (let INSTR-RETURN        (count 0))
 (let INSTR-ASSIGN        (count))
@@ -72,6 +73,7 @@
 (let INSTR-DEREF-ASSIGN  (count))
 (let INSTR-CAST          (count))
 (let INSTR-MAKE-STRUCT   (count))
+(let INSTR-MEMBER-ASSIGN (count))
 
 (let ITEM-PROC-DEF         (count 0))
 (let ITEM-EXTERN-PROC-DECL (count))
@@ -80,6 +82,7 @@
 (let ARG-INT    (count 0))
 (let ARG-STRING (count))
 (let ARG-VAR    (count))
+(let ARG-MEMBER (count))
 
 (let TYPE-UNIT   (count 0))
 (let TYPE-S8     (count))

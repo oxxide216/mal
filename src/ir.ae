@@ -33,6 +33,16 @@
         (if expr::'expr'::'cast'
           expr::'expr'::'cast'::'type')
     }
+    (not-unit? expr::'expr'::'member') => {
+      'type': ARG-MEMBER
+      'value': {
+        'struct': expr::'expr'::'member'::'struct-name'
+        'member': expr::'expr'::'member'::'member-name'
+      }
+      'cast':
+        (if expr::'expr'::'cast'
+          expr::'expr'::'cast'::'type')
+    }
     ...                     =>
       (do
         (error 'Unknown expression type: ' expr::'expr')
@@ -103,6 +113,18 @@
           'type': INSTR-ASSIGN
           'let': (not-unit? instr::'let')
           'dest': instr::'var-name'
+          'args': [
+            (gen-ir-arg instr::'expr')
+          ]
+          'last': last
+        }
+      ]
+      'member-assign' => [
+        {
+          'type': INSTR-MEMBER-ASSIGN
+          'let': (not-unit? instr::'let')
+          'struct': instr::'struct-name'
+          'member': instr::'member-name'
           'args': [
             (gen-ir-arg instr::'expr')
           ]

@@ -182,6 +182,11 @@
       (parse-node 'str' [
         (name-token TT-STRING 'value')
       ])
+      (parse-node 'member' [
+        (name-token TT-IDENT 'struct-name')
+        (skip-token TT-DOT)
+        (name-token TT-IDENT 'member-name')
+      ])
       (parse-node 'var' [
         (name-token TT-IDENT 'name')
       ])
@@ -301,6 +306,15 @@
     (parse-node 'deref-assign' [
       (skip-token TT-STAR)
       (name-token TT-IDENT 'var-name')
+      (skip-token TT-ASSIGN)
+      (parse-node 'expr' [
+        (parse-expr)
+      ])
+    ])
+    (parse-node 'member-assign' [
+      (name-token TT-IDENT 'struct-name')
+      (skip-token TT-DOT)
+      (name-token TT-IDENT 'member-name')
       (skip-token TT-ASSIGN)
       (parse-node 'expr' [
         (parse-expr)

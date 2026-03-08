@@ -178,17 +178,6 @@
     (set gen::'return-type' callee::'return-type'))
   gen)
 
-(let struct-fields-eq \struct types ->
-  (if (!= (len struct::'value'::'fields') (len types))
-    (ret false))
-
-  (let found-error
-    (for pair in (zip struct::'value'::'fields' types)
-      (if (!= pair::0::'type' pair::1)
-        (ret true))))
-
-  (!= found-error true))
-
 (let gen-meta-arg-inner \gen arg index ->
   (let type
     (match arg::'type'
@@ -223,42 +212,39 @@
                  (+ gen::'meta'::'vars'::name::'uses' 1))
             (set gen::'meta'::'vars'::name::'end' index)
             gen::'meta'::'vars'::name::'type'))
-      ARG-STRUCT =>
+      ARG-MEMBER =>
         (do
-          (let gen-with-types
-            (fold
-              \result field ->
-                (let new (gen-meta-arg-inner result::0 field index))
-                [
-                  new::0
-                  (after result::1 new::1)
-                ] <>
-              [gen []]
-              arg::'value'::'fields'))
+          (let struct-name arg::'value'::'struct')
+          (let member-name arg::'value'::'member')
 
-          (set gen gen-with-types::0)
-
-          (let type
-            (for type in gen::'types'
-              (if (== type::'value'::'name' arg::'value'::'name')
-                (ret type))))
-
-          (if (unit? type)
-            (error 'Unknown type: ' arg::'value'::'name')
-            (set gen::'has-errors' true)
-            {
-              'type': TYPE-UNIT
-              'value': unit
-            }
-           elif (not (struct-fields-eq type gen-with-types::1))
-            (error 'Wrong fields for type ' arg::'value'::'name')
-            (set gen::'has-errors' true)
+          (if (unit? gen::'meta'::'vars'::struct-name)
+            (error 'Symbol ' struct-name ' was not defined before usage')
+            (set gen::'meta'::'has-errors' true)
             {
               'type': TYPE-UNIT
               'value': unit
             }
            else
-            type))))
+            (set gen::'meta'::'vars'::struct-name::'uses'
+                 (+ gen::'meta'::'vars'::struct-name::'uses' 1))
+            (set gen::'meta'::'vars'::struct-name::'end' index)
+
+            (let type gen::'meta'::'vars'::struct-name::'type')
+
+            (let field
+              (for field in type::'value'::'fields'
+                (if (== field::'name' member-name)
+                  (ret field))))
+
+            (if (unit? field)
+              (error 'Type ' type::'value'::'name' ' has no member ' member-name)
+              (set gen::'has-errors' true)
+              {
+                'type': TYPE-UNIT
+                'value': unit
+              }
+             else
+              field::'type')))))
 
   [gen type])
 
@@ -310,6 +296,17 @@
          (+ gen::'meta'::'vars'::name::'uses' 1))
     (set gen::'meta'::'vars'::name::'end' index))
   gen)
+
+(let struct-fields-eq \struct types ->
+  (if (!= (len struct::'value'::'fields') (len types))
+    (ret false))
+
+  (let found-error
+    (for pair in (zip struct::'value'::'fields' types)
+      (if (!= pair::0::'type' pair::1)
+        (ret true))))
+
+  (!= found-error true))
 
 (let gen-meta-instr \gen instr-indexed ->
   (let instr instr-indexed::0)
@@ -369,6 +366,11 @@
 
           (if (unit? type)
             (error 'Unknown type: ' instr::'struct')
+            (set gen::'has-errors' true)
+            (let unit-type { 'type': TYPE-UNIT 'value': unit })
+            (set gen (create-dest-var gen unit-type instr index))
+           elif (not (struct-fields-eq type gen::'arg-types'))
+            (error 'Wrong fields for type ' instr::'struct')
             (set gen::'has-errors' true)
             (let unit-type { 'type': TYPE-UNIT 'value': unit })
             (set gen (create-dest-var gen unit-type instr index))
