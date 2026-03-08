@@ -7,8 +7,8 @@
     'section \'.text\' executable\n'
     'public _start\n'
     '_start:\n'
-    '  pop rdi\n'
-    '  pop rsi\n'
+    '  mov rdi,qword[rsp]\n'
+    '  lea rsi,qword[rsp+8]\n'
     '  call main\n'
     '  mov rdi,rax\n'
     '  mov rax,60\n'
@@ -269,7 +269,24 @@
   { 'asm': [] 'stack-usage': 0 }
   (reverse (zip params (gen-range shift (+ (len params) shift))))))
 
+(let min \a b ->
+  (if (< b a)
+    b
+   else
+    a))
+
 (let call-gen-asm-linux-x86_64-fasm \instr meta ->
+  (let common-args (gen-range 0 (min (len instr::'args') (len meta::'param-types'))))
+  (let common-args-push
+    (map
+      \i ->
+        (join ['  push ' LINUX-x86_64-FASM-PROC-PARAM-REGS::TYPE-PTR::i::'name' '\n'] '') <>
+      common-args))
+  (let common-args-pop
+    (map
+      \i ->
+        (join ['  pop ' LINUX-x86_64-FASM-PROC-PARAM-REGS::TYPE-PTR::i::'name' '\n'] '') <>
+      (reverse common-args)))
   (let args-with-stack-usage (proc-params-gen-asm-linux-x86_64-fasm instr::'args' meta 0))
   (let alignment (get-alignment args-with-stack-usage::'stack-usage' 16))
   (let stack-usage (+ args-with-stack-usage::'stack-usage' alignment))
@@ -288,11 +305,24 @@
      else
       ''))
   (join
-    (+ args-with-stack-usage::'asm'
-       [sub '  call ' instr::'func' '\n' add])
+    (+ (+ common-args-push
+          args-with-stack-usage::'asm')
+       (+ [sub '  call ' instr::'func' '\n' add]
+          common-args-pop))
     ''))
 
 (let call-assign-gen-asm-linux-x86_64-fasm \instr meta ->
+  (let common-args (gen-range 0 (min (len instr::'args') (len meta::'param-types'))))
+  (let common-args-push
+    (map
+      \i ->
+        (join ['  push ' LINUX-x86_64-FASM-PROC-PARAM-REGS::TYPE-PTR::i::'name' '\n'] '') <>
+      common-args))
+  (let common-args-pop
+    (map
+      \i ->
+        (join ['  pop ' LINUX-x86_64-FASM-PROC-PARAM-REGS::TYPE-PTR::i::'name' '\n'] '') <>
+      (reverse common-args)))
   (let dest-var meta::'vars'::(do instr::'dest'))
   (let params-shift
     (if (== dest-var::'type'::'type' TYPE-STRUCT)
@@ -325,16 +355,10 @@
      else
       ''))
   (join
-    (+ args-with-stack-usage::'asm'
-       [
-         lea
-         sub
-         '  call '
-         instr::'func'
-         '\n'
-         add
-         mov
-      ])
+    (+ (+ common-args-push
+          args-with-stack-usage::'asm')
+       (+ [lea sub '  call ' instr::'func' '\n' add mov]
+          common-args-pop))
     ''))
 
 (let inline-asm-gen-asm-linux-x86_64-fasm \instr ->
