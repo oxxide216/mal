@@ -134,18 +134,6 @@
     (lex-lit '"')
   ]))
 
-(let lex-retval (lex-lit 'retval'))
-(let lex-proc   (lex-lit 'proc'))
-(let lex-end    (lex-lit 'end'))
-(let lex-extern (lex-lit 'extern'))
-(let lex-eef    (lex-lit 'if'))
-(let lex-else   (lex-lit 'else'))
-(let lex-elif   (lex-lit 'elif'))
-(let lex-whail  (lex-lit 'while'))
-(let lex-as     (lex-lit 'as'))
-(let lex-struct (lex-lit 'struct'))
-(let lex-let    (lex-lit 'let'))
-
 (let lex-ident
   (lex-then
     is-ident-start
@@ -179,17 +167,6 @@
   (new-grammar lex-comment    TT-COMMENT)
   (new-grammar lex-int        TT-INT)
   (new-grammar lex-string     TT-STRING)
-  (new-grammar lex-retval     TT-RETVAL)
-  (new-grammar lex-proc       TT-PROC)
-  (new-grammar lex-end        TT-END)
-  (new-grammar lex-extern     TT-EXTERN)
-  (new-grammar lex-eef        TT-IF)
-  (new-grammar lex-else       TT-ELSE)
-  (new-grammar lex-elif       TT-ELIF)
-  (new-grammar lex-whail      TT-WHILE)
-  (new-grammar lex-as         TT-AS)
-  (new-grammar lex-struct     TT-STRUCT)
-  (new-grammar lex-let        TT-LET)
   (new-grammar lex-ident      TT-IDENT)
   (new-grammar lex-oparen     TT-OPAREN)
   (new-grammar lex-cparen     TT-CPAREN)
@@ -214,28 +191,34 @@
   (new-grammar lex-dot        TT-DOT)
 ])
 
+(let keywords {
+  'retval': TT-RETVAL
+  'proc':   TT-PROC
+  'end':    TT-END
+  'extern': TT-EXTERN
+  'if':     TT-IF
+  'else':   TT-ELSE
+  'elif':   TT-ELIF
+  'while':  TT-WHILE
+  'as':     TT-AS
+  'struct': TT-STRUCT
+  'let':    TT-LET
+})
+
 (let lexx \lexer ->
   (if (>= lexer::'pos' (len lexer::'code'))
     (ret lexer))
 
-  (let results
-    (map
-      \grammar ->
-        (let pair (grammar::'lexer' lexer))
-        (match pair
-          unit => unit
-          ...  => [
-            pair::0
-            (new-token pair::1 grammar::'type')
-          ]) <> lex-grammar))
-  (let clean (filter not-unit? results))
-  (let ordered
-    (sort
-      \a b ->
-        (< (len a::1::'lexeme')
-           (len b::1::'lexeme')) <> clean))
+  (let result
+    (for grammar in lex-grammar
+      (let pair (grammar::'lexer' lexer))
+      (if (not-unit? pair)
+        (ret [
+          pair::0
+          (new-token pair::1 grammar::'type')
+        ]))))
 
-   (if (== (len ordered) 0)
+   (if (unit? result)
     (let pos lexer::'pos')
     (if (< pos (len lexer::'code'))
       (error 'Unexpected `' lexer::'code'::pos '`')
@@ -243,7 +226,9 @@
       (error 'Unexpected EOF'))
     (exit 1))
 
-  (let result ordered::0)
+  (let keyword-type keywords::(do result::1::'lexeme'))
+  (if (not-unit? keyword-type)
+    (set result::1::'type' keyword-type))
 
   (set result::0::'tokens' (after result::0::'tokens' result::1))
   (lexx result::0))
