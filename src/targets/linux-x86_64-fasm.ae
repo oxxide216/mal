@@ -290,6 +290,11 @@
   (let args-with-stack-usage (proc-params-gen-asm-linux-x86_64-fasm instr::'args' meta 0))
   (let alignment (get-alignment args-with-stack-usage::'stack-usage' 16))
   (let stack-usage (+ args-with-stack-usage::'stack-usage' alignment))
+  (let lea
+    (if (== dest-var::'type'::'type' TYPE-STRUCT)
+      (join ['  lea rdi,[rax]\n'] '')
+     else
+      ''))
   (let sub
     (if (> alignment 0)
       (join ['  sub rsp,' (to-str alignment) '\n'] '')
@@ -307,7 +312,7 @@
   (join
     (+ (+ common-args-push
           args-with-stack-usage::'asm')
-       (+ [sub '  call ' instr::'func' '\n' add]
+       (+ [lea sub '  call ' instr::'func' '\n' add]
           common-args-pop))
     ''))
 
