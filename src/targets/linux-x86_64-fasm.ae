@@ -605,16 +605,28 @@
   (let scratch LINUX-x86_64-FASM-SCRATCH-REG::TYPE-PTR)
   (let ptr-prefix (get-ptr-prefix-linux-x86_64-fasm dest-var::'type'::'type'))
   [
-    (if (is-on-stack? rhs meta)
-      (join [
-        '  mov ' scratch ',' rhs-loc '\n'
-        '  mov ' dest-var::'loc' ',' ptr-prefix '[' scratch ']\n'
-      ] '')
-     else
-      (join [
-        '  mov ' dest-var::'loc' ',' ptr-prefix '[' rhs-loc ']\n'
-      ] ''))
-    (is-on-stack? rhs meta)
+    (match [(unit? dest-var::'loc-index') (is-on-stack? rhs meta)]
+      [false false] =>
+        (join [
+          '  mov ' dest-var::'loc' ',' ptr-prefix '[' rhs-loc ']\n'
+        ] '')
+      [false true]  =>
+        (join [
+          '  mov ' scratch ',' rhs-loc '\n'
+          '  mov ' dest-var::'loc' ',' ptr-prefix '[' scratch ']\n'
+        ] '')
+      [true  false] =>
+        (join [
+          '  mov ' scratch ',' ptr-prefix '[' rhs-loc ']\n'
+          '  mov ' dest-var::'loc' ',' scratch '\n'
+        ] '')
+      [true  true]  =>
+        (join [
+          '  mov ' scratch ',' rhs-loc '\n'
+          '  mov ' scratch ',' ptr-prefix '[' scratch ']\n'
+          '  mov ' dest-var::'loc' ',' scratch '\n'
+        ] ''))
+    (or (unit? dest-var::'loc-index') (is-on-stack? rhs meta))
   ])
 
 (let un-op-gen-asm-linux-x86_64-fasm \instr meta ->
