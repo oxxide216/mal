@@ -1,0 +1,97 @@
+proc main(argc: s32, argv: &&u8) -> s32
+  let O_RDWR = 2
+
+  let STAT_SIZE = 144 as u64
+  let STAT_ST_SIZE = 48 as u64
+
+  let PROT_READ_WRITE = 3
+
+  let MAP_PRIVATE_ANONYMOUS = 34
+  let MAP_PRIVATE = 2
+
+  if argc < 2
+    fputs(2, "Input file was not provided\n")
+    retval 1
+  end
+
+  let filename_ptr = argv + 8
+  let filename = *filename_ptr
+
+  let fd = open(filename, O_RDWR, 0)
+  let stat = mmap(0 as &u8,
+                  STAT_SIZE,
+                  PROT_READ_WRITE,
+                  MAP_PRIVATE_ANONYMOUS,
+                  0,
+                  0 as u64)
+  stat(filename, stat)
+  let size_ptr = stat + STAT_ST_SIZE
+  let size = *size_ptr as &u64
+
+  let file = mmap(0 as &u8,
+                  size,
+                  PROT_READ_WRITE,
+                  MAP_PRIVATE,
+                  fd,
+                  0 as u64)
+
+  write(1, file, size as s32)
+
+  munmap(file, size)
+  munmap(stat, STAT_SIZE)
+  close(fd)
+
+  retval 0
+end
+
+proc fputs(fd: s32, str: &u8)
+  let len = strlen(str)
+  write(fd, str, len)
+end
+
+proc strlen(str: &u8) -> s32
+  let len = 0
+  let char = *str
+  while char != 0
+    let ptr = str + len
+    len = len + 1
+    char = *ptr
+  end
+  retval len
+end
+
+proc read(fd: s32, buffer: &u8, len: s32) -> u64
+  "mov rax,0"
+  "syscall"
+end
+
+proc write(fd: s32, buffer: &u8, len: s32) -> u64
+  "mov rax,1"
+  "syscall"
+end
+
+proc open(filename: &u8, flags: s32, mode: s32) -> s32
+  "mov rax,2"
+  "syscall"
+end
+
+proc close(close: s32) -> s32
+  "mov rax,3"
+  "syscall"
+end
+
+proc stat(filename: &u8, stat: &u8) -> s32
+  "mov rax,6"
+  "syscall"
+end
+
+proc mmap(addr: &u8, len: u64, prot: s32, flags: s32, fd: s32, offset: u64) -> &u8
+  "mov r10,rcx"
+  "mov rax,9"
+  "syscall"
+end
+
+proc munmap(addr: &u8, len: u64) -> &u8
+  "mov rax,11"
+  "syscall"
+end

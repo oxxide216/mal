@@ -1,0 +1,39 @@
+proc main() -> u64
+  name = 0 as &u8
+  width = 800 as u32
+  height = 600 as u32
+  border_width = 0 as u32
+  border = 0 as u64
+  background = 0 as u64
+  display = XOpenDisplay(name)
+  if display == 0
+    puts("Bruh on display")
+  end
+
+  root_window = XDefaultRootWindow(display)
+  if root_window == 0
+    puts("Bruh on root window")
+  end
+
+  window = XCreateSimpleWindow(display, root_window, 0, 0, width, height,
+                               border_width, border, background)
+  if window == 0
+    puts("Bruh on window")
+  end
+
+  XStoreName(display, window, "Hello from MAL!")
+  XMapWindow(display, window)
+  XFlush(display)
+  while 1 == 1 end
+end
+
+extern proc puts(str: &u8)
+
+extern proc XOpenDisplay(name: &u8) -> &u64
+extern proc XDefaultRootWindow(display: &u64) -> u64
+extern proc XCreateSimpleWindow(display: &u64, parent: u64, x: s32, y: s32,
+                                width: u32, height: u32, border_width: u32,
+                                border: u64, background: u64) -> u64
+extern proc XStoreName(display: &u64, window: u64, title: &u8)
+extern proc XMapWindow(display: &u64, window: u64) -> u64
+extern proc XFlush(display: &u64)
