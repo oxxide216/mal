@@ -64,7 +64,7 @@
           (error 'Unknown target')
           (info 'Available targets:')
           (for target in TARGET-NAMES-MAP
-            (info (+ '  ' target::'key')))
+            (println (+ '        ' target::'key')))
           (exit 1))
         (with (parse-args (from args 2))
               'target'
