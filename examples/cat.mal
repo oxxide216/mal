@@ -1,3 +1,6 @@
+use "../std/io"
+use "../std/unix"
+
 proc main(argc: s32, argv: &&u8) -> s32
   let O_RDWR = 2
 
@@ -10,7 +13,7 @@ proc main(argc: s32, argv: &&u8) -> s32
   let MAP_PRIVATE = 2
 
   if argc < 2
-    fputs(2, "Input file was not provided\n")
+    print(2, "Input file was not provided\n")
     retval 1
   end
 
@@ -42,56 +45,4 @@ proc main(argc: s32, argv: &&u8) -> s32
   close(fd)
 
   retval 0
-end
-
-proc fputs(fd: s32, str: &u8)
-  let len = strlen(str)
-  write(fd, str, len)
-end
-
-proc strlen(str: &u8) -> s32
-  let len = 0
-  let char = *str
-  while char != 0
-    let ptr = str + len
-    len = len + 1
-    char = *ptr
-  end
-  retval len
-end
-
-proc read(fd: s32, buffer: &u8, len: s32) -> u64
-  "mov rax,0"
-  "syscall"
-end
-
-proc write(fd: s32, buffer: &u8, len: s32) -> u64
-  "mov rax,1"
-  "syscall"
-end
-
-proc open(filename: &u8, flags: s32, mode: s32) -> s32
-  "mov rax,2"
-  "syscall"
-end
-
-proc close(close: s32) -> s32
-  "mov rax,3"
-  "syscall"
-end
-
-proc stat(filename: &u8, stat: &u8) -> s32
-  "mov rax,6"
-  "syscall"
-end
-
-proc mmap(addr: &u8, len: u64, prot: s32, flags: s32, fd: s32, offset: u64) -> &u8
-  "mov r10,rcx"
-  "mov rax,9"
-  "syscall"
-end
-
-proc munmap(addr: &u8, len: u64) -> &u8
-  "mov rax,11"
-  "syscall"
 end

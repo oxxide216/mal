@@ -1,0 +1,35 @@
+proc read(fd: s32, buffer: &u8, len: s32) -> u64
+  "mov rax,0"
+  "syscall"
+end
+
+proc write(fd: s32, buffer: &u8, len: s32) -> u64
+  "mov rax,1"
+  "syscall"
+end
+
+proc open(filename: &u8, flags: s32, mode: s32) -> s32
+  "mov rax,2"
+  "syscall"
+end
+
+proc close(close: s32) -> s32
+  "mov rax,3"
+  "syscall"
+end
+
+proc stat(filename: &u8, stat: &u8) -> s32
+  "mov rax,6"
+  "syscall"
+end
+
+proc mmap(addr: &u8, len: u64, prot: s32, flags: s32, fd: s32, offset: u64) -> &u8
+  "mov r10,rcx"
+  "mov rax,9"
+  "syscall"
+end
+
+proc munmap(addr: &u8, len: u64) -> &u8
+  "mov rax,11"
+  "syscall"
+end

@@ -1,0 +1,11 @@
+use "str"
+use "unix"
+
+proc print(str: &u8)
+  print(1, str)
+end
+
+proc print(fd: s32, str: &u8)
+  let len = strlen(str)
+  write(1, str, len)
+end
