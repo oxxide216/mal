@@ -23,9 +23,19 @@
         (if expr::'expr'::'cast'
           expr::'expr'::'cast'::'type')
     }
+    (not-unit? expr::'expr'::'struct') => {
+      'type': ARG-STRUCT
+      'value': {
+        'name': expr::'expr'::'struct'::'name'
+        'fields': (map gen-ir-arg expr::'expr'::'struct'::'fields')
+      }
+      'cast':
+        (if expr::'expr'::'cast'
+          expr::'expr'::'cast'::'type')
+    }
     ...                     =>
       (do
-        (error 'Unknown expression type: ' expr)
+        (error 'Unknown expression type: ' expr::'expr')
         (exit 1))))
 
 (let gen-ir-elifs \elifs end-label last labels ->
@@ -139,7 +149,17 @@
           'dest': instr::'var-name'
           'func': instr::'func-name'
           'args': (map gen-ir-arg instr::'args')
-        'last': last
+          'last': last
+        }
+      ]
+      'make-struct' => [
+        {
+          'type': INSTR-MAKE-STRUCT
+          'let': (not-unit? instr::'let')
+          'dest': instr::'var-name'
+          'struct': instr::'struct-name'
+          'args': (map gen-ir-arg instr::'args')
+          'last': last
         }
       ]
       'deref-assign' => [

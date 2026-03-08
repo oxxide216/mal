@@ -3,7 +3,18 @@ struct svec2
   y: s32
 end
 
+proc svec2s(x: s32) -> svec2
+  let result = svec2 { x, x }
+  retval result
+end
+
+proc svec2_add(a: svec2, b: svec2) -> svec2
+  let c = a
+  retval c
+end
+
 proc main(argc: u32, argv: &&u8) -> u8
+  let vec = svec2s(2)
   let str0 = "Hello, World!\n"
   let str1 = "Foo, Bar!\n"
   let str2 = "Bazz!\n"

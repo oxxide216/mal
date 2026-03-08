@@ -1,10 +1,10 @@
 (use 'defs')
 
-(let init-type \expr log ->
+(let init-type \types expr log ->
   (match expr::'type'
     '&'   =>
       (do
-        (let value (init-type expr::'value'::'type' log))
+        (let value (init-type types expr::'value'::'type' log))
         [
           value::0
           {
@@ -14,30 +14,41 @@
         ])
     ... =>
       (do
-        (let type TYPES-MAP::(do expr::'type'))
-        (if (unit? type)
-          (if log
-            (error 'Unknown type: ' expr::'type'))
-          [
-            true
-            {
-              'type': TYPE-UNIT
-              'value': unit
-            }
-          ]
+        (let type-type TYPES-MAP::(do expr::'type'))
+        (if (unit? type-type)
+          (let type
+            (for type in types
+              (if (== type::'value'::'name' expr::'type')
+                (ret type))))
+
+          (if (unit? type)
+            (if log
+              (error 'Unknown type: ' expr::'type'))
+            [
+              true
+              {
+                'type': TYPE-UNIT
+                'value': unit
+              }
+            ]
+           else
+            [
+              false
+              type
+            ])
          else
           [
             false
             {
-              'type': type
+              'type': type-type
               'value': unit
             }
           ]))))
 
-(let init-param-types \params log ->
+(let init-param-types \types params log ->
   (fold
     \result param ->
-      (let type (init-type param::'type' log))
+      (let type (init-type types param::'type' log))
       {
         'types': (after result::'types' type::1)
         'has-errors': (or result::'has-errors' type::0)
@@ -45,9 +56,9 @@
     { 'types': [] 'has-errors': false }
     params))
 
-(let init-basic-meta \proc ->
-  (let param-types (init-param-types proc::'params' true))
-  (let return-type (init-type proc::'return-type' true))
+(let init-basic-meta \types proc ->
+  (let param-types (init-param-types types proc::'params' true))
+  (let return-type (init-type types proc::'return-type' true))
 
   {
     'name': proc::'name'
@@ -56,9 +67,9 @@
     'has-errors': (or param-types::'has-errors' return-type::0)
   })
 
-(let init-meta \proc ->
-  (let param-types (init-param-types proc::'params' true))
-  (let return-type (init-type proc::'return-type' true))
+(let init-meta \types proc ->
+  (let param-types (init-param-types types proc::'params' true))
+  (let return-type (init-type types proc::'return-type' true))
 
   {
     'name': proc::'name'
@@ -73,16 +84,16 @@
     'params-stack-size': 0
   })
 
-(let init-meta-gen \ir meta ->
-
+(let init-meta-gen \ir types meta ->
   {
     'ir': ir
+    'types': types
     'meta': meta
     'arg-types': []
     'return-type': unit
   })
 
-(let get-proc \ir name param-types ->
+(let get-proc \ir types name param-types ->
   (let procs
     (filter
       \item ->
@@ -99,7 +110,7 @@
   (let final-results
     (filter
       \proc ->
-        (== (init-param-types proc::'params' false)::'types' param-types) <>
+        (== (init-param-types types proc::'params' false)::'types' param-types) <>
       results))
 
   (match final-results
@@ -151,7 +162,7 @@
     ...      => [gen::'arg-types'::0 gen]))
 
 (let gen-meta-call \gen instr ->
-  (let callee (get-proc gen::'ir' instr::'func' gen::'arg-types'))
+  (let callee (get-proc gen::'ir' gen::'types' instr::'func' gen::'arg-types'))
   (if (list? callee)
     (let param-types (join (map type-to-str gen::'arg-types') ', ') )
     (let signature (join [instr::'func' '(' param-types ')'] ''))
@@ -167,7 +178,18 @@
     (set gen::'return-type' callee::'return-type'))
   gen)
 
-(let gen-meta-arg \gen arg index ->
+(let struct-fields-eq \struct types ->
+  (if (!= (len struct::'value'::'fields') (len types))
+    (ret false))
+
+  (let found-error
+    (for pair in (zip struct::'value'::'fields' types)
+      (if (!= pair::0::'type' pair::1)
+        (ret true))))
+
+  (!= found-error true))
+
+(let gen-meta-arg-inner \gen arg index ->
   (let type
     (match arg::'type'
       ARG-INT    => {
@@ -200,14 +222,56 @@
             (set gen::'meta'::'vars'::name::'uses'
                  (+ gen::'meta'::'vars'::name::'uses' 1))
             (set gen::'meta'::'vars'::name::'end' index)
-            gen::'meta'::'vars'::name::'type'))))
+            gen::'meta'::'vars'::name::'type'))
+      ARG-STRUCT =>
+        (do
+          (let gen-with-types
+            (fold
+              \result field ->
+                (let new (gen-meta-arg-inner result::0 field index))
+                [
+                  new::0
+                  (after result::1 new::1)
+                ] <>
+              [gen []]
+              arg::'value'::'fields'))
+
+          (set gen gen-with-types::0)
+
+          (let type
+            (for type in gen::'types'
+              (if (== type::'value'::'name' arg::'value'::'name')
+                (ret type))))
+
+          (if (unit? type)
+            (error 'Unknown type: ' arg::'value'::'name')
+            (set gen::'has-errors' true)
+            {
+              'type': TYPE-UNIT
+              'value': unit
+            }
+           elif (not (struct-fields-eq type gen-with-types::1))
+            (error 'Wrong fields for type ' arg::'value'::'name')
+            (set gen::'has-errors' true)
+            {
+              'type': TYPE-UNIT
+              'value': unit
+            }
+           else
+            type))))
+
+  [gen type])
+
+(let gen-meta-arg \gen arg index ->
+  (let gen-with-type (gen-meta-arg-inner gen arg index))
+  (set gen gen-with-type::0)
 
   (if arg::'cast'
-    (let new-type (init-type arg::'cast' true))
-    (if (not (can-cast? type new-type::1))
+    (let new-type (init-type gen::'types' arg::'cast' true))
+    (if (not (can-cast? gen-with-type::1 new-type::1))
       (error
         'Cannot cast '
-        (type-to-str type)
+        (type-to-str gen-with-type::1)
         ' -> '
         (type-to-str new-type::1))
       (set gen::'meta'::'has-errors' true))
@@ -217,7 +281,7 @@
   (with
     gen
     'arg-types'
-    (after gen::'arg-types' type)))
+    (after gen::'arg-types' gen-with-type::1)))
 
 (let create-dest-var \gen type instr index ->
   (let name instr::'dest')
@@ -290,7 +354,26 @@
       (do
         (set gen (gen-meta-call gen instr))
         (if instr::'let'
-          (set gen (create-dest-var gen gen::'return-type' instr index))
+          (let return-type (init-type gen::'types' gen::'return-type' true))
+          (set gen::'has-errors' return-type::0)
+          (set gen (create-dest-var gen return-type::1 instr index))
+         else
+          (set gen (use-dest-var gen instr index))))
+    INSTR-MAKE-STRUCT =>
+      (do
+        (if instr::'let'
+          (let type
+            (for type in gen::'types'
+              (if (== type::'value'::'name' instr::'struct')
+                (ret type))))
+
+          (if (unit? type)
+            (error 'Unknown type: ' instr::'struct')
+            (set gen::'has-errors' true)
+            (let unit-type { 'type': TYPE-UNIT 'value': unit })
+            (set gen (create-dest-var gen unit-type instr index))
+           else
+            (set gen (create-dest-var gen type instr index)))
          else
           (set gen (use-dest-var gen instr index)))))
 
@@ -309,12 +392,16 @@
     })
   gen)
 
-(let gen-meta-item-basic \ir item ->
+(let gen-meta-item-basic \types ir item ->
   (match item::'type'
     ITEM-PROC-DEF         =>
       (do
         (let params-indexed (zip item::'params' (gen-range 0 (len item::'params'))))
-        (let gen (fold gen-meta-param (init-meta-gen ir (init-meta item)) params-indexed))
+        (let gen
+          (fold
+            gen-meta-param
+            (init-meta-gen ir types (init-meta types item))
+            params-indexed))
         (if gen::'meta'::'has-errors'
           (exit 1))
         (with item 'meta' gen::'meta'))
@@ -325,19 +412,77 @@
           (exit 1))
         (with item 'meta' meta::1))))
 
-(let gen-meta-item \ir item ->
+(let gen-meta-item \types ir item ->
   (match item::'type'
     ITEM-PROC-DEF         =>
       (do
         (let body-indexed (zip item::'body' (gen-range 0 (len item::'body'))))
-        (let gen (init-meta-gen ir item::'meta'))
+        (let gen (init-meta-gen ir types item::'meta'))
         (let result (fold gen-meta-instr gen body-indexed))
-        (if result::'meta'::'has-errors'
-          (exit 1))
         (with item 'meta' result::'meta'))
     ITEM-EXTERN-PROC-DECL => item::'meta'))
 
+(let init-fields \types fields ->
+  (fold
+    \result field ->
+      (let type (init-type types field::'type' true))
+      {
+        'fields':
+          (after
+            result::'fields'
+            {
+              'name': field::'name'
+              'type': type::1
+            })
+        'has-errors': (or result::'has-errors' type::0)
+      } <>
+    { 'fields': [] 'has-errors': false }
+    fields))
+
+(let gen-struct \types item ->
+  (let fields (init-fields types item::'fields'))
+
+  (after
+    types
+    {
+      'type': TYPE-STRUCT
+      'value': {
+        'name': item::'name'
+        'fields': fields::'fields'
+      }
+      'has-errors': fields::'has-errors'
+    }))
+
+(let gen-types \ir ->
+  (let allowed
+    (filter
+      \item -> (contains? [ITEM-STRUCT-DEF] item::'type') <>
+      ir))
+
+  (fold
+    \types item ->
+      (match item::'type'
+        ITEM-STRUCT-DEF => (gen-struct types item)) <>
+    []
+    allowed))
+
 (let gen-meta \ir ->
-  (let first-pass (filter not-unit? (map \item -> (gen-meta-item-basic ir item) <> ir)))
-  (let second-pass (map \item -> (gen-meta-item first-pass item) <> first-pass))
-  second-pass)
+  (let types (gen-types ir))
+  (for type in types
+    (if type::'has-errors'
+      (exit 1)))
+
+  (let first-pass
+    (filter
+      not-unit?
+      (map \item -> (gen-meta-item-basic types ir item) <>
+      ir)))
+  (let second-pass (map \item -> (gen-meta-item types first-pass item) <> first-pass))
+  (for item in second-pass
+    (if item::'meta'::'has-errors'
+      (exit 1)))
+
+  {
+    'items': second-pass
+    'types': types
+  })

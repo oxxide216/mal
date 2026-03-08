@@ -38,6 +38,8 @@
 (let TT-IDENT      (count))
 (let TT-OPAREN     (count))
 (let TT-CPAREN     (count))
+(let TT-OCURLY     (count))
+(let TT-CCURLY     (count))
 (let TT-ASSIGN     (count))
 (let TT-COMMA      (count))
 (let TT-COLON      (count))
@@ -69,6 +71,7 @@
 (let INSTR-UN-OP         (count))
 (let INSTR-DEREF-ASSIGN  (count))
 (let INSTR-CAST          (count))
+(let INSTR-MAKE-STRUCT   (count))
 
 (let ITEM-PROC-DEF         (count 0))
 (let ITEM-EXTERN-PROC-DECL (count))
@@ -100,19 +103,6 @@
   'u16':  TYPE-U16
   'u32':  TYPE-U32
   'u64':  TYPE-U64
-})
-
-(let TYPE-SIZE-MAP {
-  TYPE-UNIT: 0
-  TYPE-S8:   1
-  TYPE-S16:  2
-  TYPE-S32:  4
-  TYPE-S64:  8
-  TYPE-U8:   1
-  TYPE-U16:  2
-  TYPE-U32:  4
-  TYPE-U64:  8
-  TYPE-PTR:  8
 })
 
 ; Binary operations
@@ -150,18 +140,39 @@
   '*':   OP-DEREF
 })
 
+(let get-type-size \type ->
+  (match type::'type'
+    TYPE-UNIT   => 0
+    TYPE-S8     => 1
+    TYPE-S16    => 2
+    TYPE-S32    => 4
+    TYPE-S64    => 8
+    TYPE-U8     => 1
+    TYPE-U16    => 2
+    TYPE-U32    => 4
+    TYPE-U64    => 8
+    TYPE-PTR    => 8
+    TYPE-STRUCT =>
+      (fold
+        +
+        0
+        (map
+          \field -> (get-type-size field::'type') <>
+          type::'value'::'fields'))))
+
 (let type-to-str \type ->
   (match type::'type'
-    TYPE-UNIT => 'unit'
-    TYPE-S8   => 's8'
-    TYPE-S16  => 's16'
-    TYPE-S32  => 's32'
-    TYPE-S64  => 's64'
-    TYPE-U8   => 'u8'
-    TYPE-U16  => 'u16'
-    TYPE-U32  => 'u32'
-    TYPE-U64  => 'u64'
-    TYPE-PTR  => (+ '&' (type-to-str type::'value'))))
+    TYPE-UNIT   => 'unit'
+    TYPE-S8     => 's8'
+    TYPE-S16    => 's16'
+    TYPE-S32    => 's32'
+    TYPE-S64    => 's64'
+    TYPE-U8     => 'u8'
+    TYPE-U16    => 'u16'
+    TYPE-U32    => 'u32'
+    TYPE-U64    => 'u64'
+    TYPE-PTR    => (+ '&' (type-to-str type::'value'))
+    TYPE-STRUCT => type::'value'::'name'))
 
 (let is-int? \type ->
   (contains? [
@@ -184,3 +195,9 @@
   (match a-result
     false => false
     ...   => b))
+
+(macro lor \a b ->
+  (let a-result a)
+  (match a-result
+    unit => b
+    ...  => a-result))

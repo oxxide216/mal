@@ -111,6 +111,7 @@
   (lex-seq [
     (lex-opt
       (lex-lit '-'))
+    (lex-if is-number)
     (lex-while is-number)
   ]))
 
@@ -153,6 +154,8 @@
 
 (let lex-oparen    (lex-lit '('))
 (let lex-cparen    (lex-lit ')'))
+(let lex-ocurly    (lex-lit '{'))
+(let lex-ccurly    (lex-lit '}'))
 (let lex-assign    (lex-lit '='))
 (let lex-comma     (lex-lit ','))
 (let lex-colon     (lex-lit ':'))
@@ -189,6 +192,8 @@
   (new-grammar lex-ident      TT-IDENT)
   (new-grammar lex-oparen     TT-OPAREN)
   (new-grammar lex-cparen     TT-CPAREN)
+  (new-grammar lex-ocurly     TT-OCURLY)
+  (new-grammar lex-ccurly     TT-CCURLY)
   (new-grammar lex-assign     TT-ASSIGN)
   (new-grammar lex-comma      TT-COMMA)
   (new-grammar lex-colon      TT-COLON)

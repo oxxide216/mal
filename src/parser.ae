@@ -261,6 +261,20 @@
         ]))
       (skip-token TT-CPAREN)
     ])
+      (parse-node 'make-struct' [
+      (parse-opt
+        (name-token TT-LET 'let'))
+      (name-token TT-IDENT 'var-name')
+      (skip-token TT-ASSIGN)
+        (name-token TT-IDENT 'struct-name')
+        (skip-token TT-OCURLY)
+        (parse-list-sep 'args'
+          (skip-token TT-COMMA)
+          (parse-node 'arg' [
+            (parse-expr)
+          ]))
+        (skip-token TT-CCURLY)
+      ])
     (parse-node 'bin-op' [
       (parse-opt
         (name-token TT-LET 'let'))
