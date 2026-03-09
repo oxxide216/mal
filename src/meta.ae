@@ -58,7 +58,11 @@
 
 (let init-basic-meta \types proc ->
   (let param-types (init-param-types types proc::'params' true))
-  (let return-type (init-type types proc::'return-type' true))
+  (let return-type
+    (if (!= proc::'return-type'::'type' 0)
+      (init-type types proc::'return-type' true)
+     else
+      [false unit]))
 
   {
     'name': proc::'name'
@@ -69,7 +73,11 @@
 
 (let init-meta \types proc ->
   (let param-types (init-param-types types proc::'params' true))
-  (let return-type (init-type types proc::'return-type' true))
+  (let return-type
+    (if (!= proc::'return-type'::'type' 0)
+      (init-type types proc::'return-type' true)
+     else
+      [false unit]))
 
   {
     'name': proc::'name'
@@ -446,10 +454,10 @@
         (with item 'meta' gen::'meta'))
     ITEM-EXTERN-PROC-DECL =>
       (do
-        (let meta (init-basic-meta item))
-        (if meta::0
+        (let meta (init-basic-meta types item))
+        (if meta::'has-errors'
           (exit 1))
-        (with item 'meta' meta::1))))
+        (with item 'meta' meta))))
 
 (let gen-meta-item \types ir item ->
   (match item::'type'
@@ -459,7 +467,8 @@
         (let gen (init-meta-gen ir types item::'meta'))
         (let result (fold gen-meta-instr gen body-indexed))
         (with item 'meta' result::'meta'))
-    ITEM-EXTERN-PROC-DECL => item::'meta'))
+    ITEM-EXTERN-PROC-DECL => item
+    ...                   => unit))
 
 (let init-fields \types fields ->
   (fold
@@ -519,7 +528,13 @@
       not-unit?
       (map \item -> (gen-meta-item-basic types ir item) <>
       ir)))
-  (let second-pass (map \item -> (gen-meta-item types first-pass item) <> first-pass))
+
+  (let second-pass
+    (filter
+      not-unit?
+      (map
+        \item -> (gen-meta-item types first-pass item) <>
+        first-pass)))
 
   (if (unit? main-proc)
     (error 'Program should contain a \'main\' procedure')

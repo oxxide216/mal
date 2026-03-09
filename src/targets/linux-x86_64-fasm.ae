@@ -256,11 +256,12 @@
       (let index param-indexed::1)
       (let type (get-arg-type param meta))
       (let stack-offset (get-stack-offset param meta))
-      (let stack-type (type-to-stack-linux-x86_64-fasm type::'type'))
-      (let param-loc LINUX-x86_64-FASM-PROC-PARAM-REGS::(do type::'type')::index::'name')
+      (let stack-type (type-to-stack-linux-x86_64-fasm type))
       (let loc (arg-gen-asm-linux-x86_64-fasm param meta))
       (let asm
         (if (< index (len LINUX-x86_64-FASM-PROC-PARAM-REGS::(do type::'type')))
+          (let param-loc
+            LINUX-x86_64-FASM-PROC-PARAM-REGS::(do type::'type')::index::'name')
           (move-linux-x86_64-fasm param-loc stack-offset param type meta false)
          else
           (set
@@ -986,11 +987,19 @@
     ''))
 
 (let extern-proc-gen-asm-linux-x86_64-fasm \proc ->
-  (let name proc::'name')
+  (let hash
+    (fold
+      +
+      0
+      (map
+        \type -> (hash (to-str type)) <>
+        proc::'meta'::'param-types')))
+
+  (let name (+ proc::'name' (to-str (abs hash))))
 
   (join [
-    'extrn \'' name '\' as _' name '\n'
-    name ' = plt _' name '\n'
+    'extrn ' proc::'name' '\n'
+    name ' = plt ' proc::'name' '\n'
   ] ''))
 
 (let item-gen-asm-linux-x86_64-fasm \item ir ->
@@ -1075,7 +1084,7 @@
 
   (let name (+ main-proc::'name' (to-str (abs hash))))
 
-  (join ['main:\n  call ' name '\n  ret\n'] ''))
+  (join ['public main\nmain:\n  call ' name '\n  ret\n'] ''))
 
 (let gen-asm-linux-x86_64-fasm \ir gen-start ->
   (let full-items (map proc-alloc-regs-linux-x86_64-fasm ir::'items'))
