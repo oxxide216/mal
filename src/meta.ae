@@ -522,7 +522,7 @@
   (let second-pass (map \item -> (gen-meta-item types first-pass item) <> first-pass))
 
   (if (unit? main-proc)
-    (error 'Program should containt \'main\' procedure')
+    (error 'Program should contain a \'main\' procedure')
     (exit 1))
 
   (for type in types
