@@ -1,0 +1,17 @@
+use "../std/io"
+
+proc main(argc: s32, argv: &&u8) -> s32
+  if argc < 2
+    print_usage()
+    retval 1
+  end
+
+  let code = read_file("README.md")
+  print(code)
+
+  retval 0
+end
+
+proc print_usage()
+  println("Usage: mal [FLAGS]... [FILE]\n")
+end
