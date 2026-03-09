@@ -12,37 +12,39 @@ proc main(argc: s32, argv: &&u8) -> s32
   let MAP_PRIVATE_ANONYMOUS = 34
   let MAP_PRIVATE = 2
 
-  if argc < 2
-    print(2, "Input file was not provided\n")
-    retval 1
-  end
-
-  let filename_ptr = argv + 8
-  let filename = *filename_ptr
-
-  let fd = open(filename, O_RDWR, 0)
   let stat = mmap(0 as &u8,
                   STAT_SIZE,
                   PROT_READ_WRITE,
                   MAP_PRIVATE_ANONYMOUS,
                   0,
                   0 as u64)
-  stat(filename, stat)
   let size_ptr = stat + STAT_ST_SIZE
-  let size = *size_ptr as &u64
 
-  let file = mmap(0 as &u8,
-                  size,
-                  PROT_READ_WRITE,
-                  MAP_PRIVATE,
-                  fd,
-                  0 as u64)
+  let i = 1
 
-  write(1, file, size as s32)
+  while i < argc
+    let offset = i * 8
+    let filename_ptr = argv + offset
+    let filename = *filename_ptr
 
-  munmap(file, size)
+    stat(filename, stat)
+    let size = *size_ptr as &u64
+
+    let fd = open(filename, O_RDWR, 0)
+    let file = mmap(0 as &u8,
+                    size,
+                    PROT_READ_WRITE,
+                    MAP_PRIVATE,
+                    fd,
+                    0 as u64)
+    close(fd)
+    write(1, file, size as s32)
+    munmap(file, size)
+
+    i = i + 1
+  end
+
   munmap(stat, STAT_SIZE)
-  close(fd)
 
   retval 0
 end

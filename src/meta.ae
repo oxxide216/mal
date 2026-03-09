@@ -91,6 +91,7 @@
     'meta': meta
     'arg-types': []
     'return-type': unit
+    'label-indices': {}
   })
 
 (let get-proc \ir types name param-types ->
@@ -309,6 +310,35 @@
 
   (!= found-error true))
 
+(let update-var-ends-in-a-loop \gen instr index ->
+  (let label-index gen::'label-indices'::(do instr::'target'))
+  (if (not-unit? label-index)
+    (let vars
+      (map
+        \var -> (with var::'value' 'name' var::'key') <>
+        gen::'meta'::'vars'))
+
+    (let included-vars
+      (filter
+        \var ->
+          (and (< var::'begin' label-index)
+               (and (> var::'end' label-index)
+                    (< var::'end' index))) <>
+        vars))
+
+    (println included-vars)
+
+    (set
+      gen::'meta'::'vars'
+      (fold
+        \vars var ->
+          (set vars::(do var::'name')::'end' index)
+          vars <>
+        gen::'meta'::'vars'
+        included-vars)))
+
+  gen)
+
 (let gen-meta-instr \gen instr-indexed ->
   (let instr instr-indexed::0)
   (let index instr-indexed::1)
@@ -319,7 +349,7 @@
       instr::'args'))
 
   (match instr::'type'
-    INSTR-RETURN      =>
+    INSTR-RETURN        =>
       (if (!= gen::'arg-types'::0 gen::'meta'::'return-type')
         (error gen::'meta'::'name'
                ': unexpected return type: '
@@ -327,19 +357,19 @@
                ', expected '
                (type-to-str gen::'meta'::'return-type'))
         (set gen::'meta'::'has-errors' true))
-    INSTR-ASSIGN      =>
+    INSTR-ASSIGN        =>
       (if instr::'let'
         (set gen (create-dest-var gen gen::'arg-types'::0 instr index))
        else
         (set gen (use-dest-var gen instr index)))
-    INSTR-BIN-OP      =>
+    INSTR-BIN-OP        =>
       (if instr::'let'
         (let result (get-bin-op-dest-type gen instr::'op' instr::'args'))
         (set gen result::1)
         (set gen (create-dest-var gen result::0 instr index))
        else
         (set gen (use-dest-var gen instr index)))
-    INSTR-UN-OP       =>
+    INSTR-UN-OP         =>
       (if instr::'let'
         (let result (get-un-op-dest-type gen instr::'op' instr::'args'))
         (set gen result::1)
@@ -348,7 +378,7 @@
         (set gen (use-dest-var gen instr index)))
     INSTR-CALL        =>
       (set gen (gen-meta-call gen instr))
-    INSTR-CALL-ASSIGN =>
+    INSTR-CALL-ASSIGN   =>
       (do
         (set gen (gen-meta-call gen instr))
         (if instr::'let'
@@ -357,7 +387,7 @@
           (set gen (create-dest-var gen return-type::1 instr index))
          else
           (set gen (use-dest-var gen instr index))))
-    INSTR-MAKE-STRUCT =>
+    INSTR-MAKE-STRUCT   =>
       (do
         (if instr::'let'
           (let type
@@ -378,7 +408,15 @@
            else
             (set gen (create-dest-var gen type instr index)))
          else
-          (set gen (use-dest-var gen instr index)))))
+          (set gen (use-dest-var gen instr index))))
+    INSTR-LABEL         =>
+      (set gen::'label-indices'::(do instr::'name') index)
+    INSTR-COND-JUMP     =>
+      (set gen (update-var-ends-in-a-loop gen instr index))
+    INSTR-COND-NOT-JUMP =>
+      (set gen (update-var-ends-in-a-loop gen instr index))
+    INSTR-JUMP          =>
+      (set gen (update-var-ends-in-a-loop gen instr index)))
 
   gen)
 
