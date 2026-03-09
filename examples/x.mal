@@ -1,22 +1,19 @@
 proc main() -> u64
-  name = 0 as &u8
-  width = 800 as u32
-  height = 600 as u32
-  border_width = 0 as u32
-  border = 0 as u64
-  background = 0 as u64
-  display = XOpenDisplay(name)
+  let WIDTH = 800 as u32
+  let HEIGHT = 600 as u32
+
+  let display = XOpenDisplay(0 as &u8)
   if display == 0
     puts("Bruh on display")
   end
 
-  root_window = XDefaultRootWindow(display)
+  let root_window = XDefaultRootWindow(display)
   if root_window == 0
     puts("Bruh on root window")
   end
 
-  window = XCreateSimpleWindow(display, root_window, 0, 0, width, height,
-                               border_width, border, background)
+  let window = XCreateSimpleWindow(display, root_window, 0, 0, WIDTH, HEIGHT,
+                                   0 as u32, 0 as u64, 0 as u64)
   if window == 0
     puts("Bruh on window")
   end
@@ -24,6 +21,7 @@ proc main() -> u64
   XStoreName(display, window, "Hello from MAL!")
   XMapWindow(display, window)
   XFlush(display)
+
   while 1 == 1 end
 end
 
