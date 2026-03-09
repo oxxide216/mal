@@ -326,8 +326,6 @@
                     (< var::'end' index))) <>
         vars))
 
-    (println included-vars)
-
     (set
       gen::'meta'::'vars'
       (fold
