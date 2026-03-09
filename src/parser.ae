@@ -304,9 +304,8 @@
       ])
     ])
     (parse-node 'deref-assign' [
-      (skip-token TT-STAR)
       (name-token TT-IDENT 'var-name')
-      (skip-token TT-ASSIGN)
+      (skip-token TT-DDOT-ASSIGN)
       (parse-node 'expr' [
         (parse-expr)
       ])
