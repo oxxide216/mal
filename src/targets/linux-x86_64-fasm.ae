@@ -697,7 +697,7 @@
 (let deref-assign-gen-asm-linux-x86_64-fasm \instr meta ->
   (let dest-var meta::'vars'::(do instr::'dest'))
   (let rhs-loc (arg-gen-asm-linux-x86_64-fasm instr::'args'::0 meta))
-  (let scratch LINUX-x86_64-FASM-SCRATCH-REG::(do dest-var::'type'::'type'))
+  (let scratch LINUX-x86_64-FASM-SCRATCH-REG::(do dest-var::'type'::'value'::'type'))
   (let ptr-prefix (get-ptr-prefix-linux-x86_64-fasm dest-var::'type'::'value'::'type'))
   (let dest-on-stack (unit? dest-var::'loc-index'))
   (let rhs-on-stack (is-on-stack? instr::'args'::0 meta))
@@ -706,7 +706,7 @@
       [false false] =>
         (join [
           '  mov ' scratch ',' rhs-loc '\n'
-          '  mov ' ptr-prefix '[' dest-var::'loc' '],' rhs-loc '\n'
+          '  mov ' ptr-prefix '[' dest-var::'loc' '],' scratch '\n'
         ] '')
       [false true]  =>
         (join [
@@ -723,7 +723,7 @@
           '  mov rax,' dest-var::'loc' '\n'
           '  mov ' ptr-prefix '[rax],' scratch '\n'
         ] ''))
-    (is-on-stack? instr::'args'::0 meta)
+    dest-on-stack
   ])
 
 (let make-struct-gen-asm-linux-x86_64-fasm \instr meta ->
