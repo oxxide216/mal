@@ -97,16 +97,12 @@
         (let sizes (map \field -> (get-type-size field::'type') <> prev))
         (let relative-offset (fold + 0 sizes))
 
-        (let global-offset
-          (if struct-var::'is-param'
-            (+ struct-var::'stack-offset' relative-offset)
-           else
-            (- struct-var::'stack-offset' relative-offset)))
+        (let global-offset (+ struct-var::'stack-offset' relative-offset))
 
         (get-stack-loc-linux-x86_64-fasm
           field::'type'::'type'
           global-offset
-          struct-var::'is-param'))))
+          (not-unit? struct-var::'param-index')))))
 
 (let move-linux-x86_64-fasm \dest-loc dest-stack-offset arg type meta deref ->
   (let arg-loc (arg-gen-asm-type-linux-x86_64-fasm arg type::'type' meta))
@@ -251,47 +247,50 @@
   (let alignment (% num amount))
   (- amount alignment))
 
-(let proc-params-get-stack-usage-linux-x86_64-fasm \params meta shift ->
+(let proc-params-get-stats-linux-x86_64-fasm \params meta shift ->
   (fold
-    \stack-usage param-indexed ->
-      (let param param-indexed::0)
-      (let index param-indexed::1)
+    \result param ->
       (let type (get-arg-type param meta))
+      (let type-mask LINUX-x86_64-FASM-TYPE-MASK-MAP::(do type::'type'))
       (let stack-type (type-to-stack-linux-x86_64-fasm type))
-      (if (< index (len LINUX-x86_64-FASM-PROC-PARAM-REGS::(do type::'type')))
-        stack-usage
+      (let regs-used (lor result::'regs-used'::type-mask 0))
+      (if (and (< regs-used (len LINUX-x86_64-FASM-PROC-PARAM-REGS::(do type::'type')))
+               (!= type::'type' TYPE-STRUCT))
+        (set result::'regs-used'::type-mask (+ regs-used 1))
+        result
        else
-        (+ stack-usage (get-type-size stack-type))) <>
-  0
-  (reverse (zip params (gen-range shift (+ (len params) shift))))))
+        (with
+          result
+          'stack-usage'
+          (+ result::'stack-usage' (get-type-size stack-type)))) <>
+  { 'stack-usage': 0 'regs-used': {} }
+  params))
 
-(let proc-params-gen-asm-linux-x86_64-fasm \params meta shift stack-usage ->
+(let proc-params-gen-asm-linux-x86_64-fasm \params meta shift stats ->
+  (let regs-used
+    (with stats::'regs-used' 0 (+ (lor stats::'regs-used'::0 0) shift)))
+
   (fold
-    \result param-indexed ->
-      (let param param-indexed::0)
-      (let index param-indexed::1)
+    \result param ->
       (let type (get-arg-type param meta))
+      (let type-mask LINUX-x86_64-FASM-TYPE-MASK-MAP::(do type::'type'))
       (let stack-type (type-to-stack-linux-x86_64-fasm type))
       (let loc (arg-gen-asm-linux-x86_64-fasm param meta))
+      (let regs-used (lor result::'regs-used'::type-mask 0))
       (let asm
-        (if (< index (len LINUX-x86_64-FASM-PROC-PARAM-REGS::(do type::'type')))
+        (if (and (<= regs-used (len LINUX-x86_64-FASM-PROC-PARAM-REGS::(do type::'type')))
+                 (!= type::'type' TYPE-STRUCT))
+          (set result::'regs-used'::type-mask (- regs-used 1))
           (let param-loc
-            LINUX-x86_64-FASM-PROC-PARAM-REGS::(do type::'type')::index::'name')
+            LINUX-x86_64-FASM-PROC-PARAM-REGS::(do type::'type')::(- regs-used 1)::'name')
           (move-linux-x86_64-fasm param-loc unit param type meta false)
          else
           (set result::'offset' (+ result::'offset' (get-type-size stack-type)))
-          (let offset (- stack-usage result::'offset'))
-          (let param-loc
-            (join [
-              (get-ptr-prefix-linux-x86_64-fasm stack-type::'type')
-              '[rsp+'
-              (to-str offset)
-              ']'
-            ] ''))
-          (move-linux-x86_64-fasm param-loc offset param type meta false)))
+          (let offset (- stats::'stack-usage' result::'offset'))
+          (move-linux-x86_64-fasm 'rsp' offset param stack-type meta true)))
       (with result 'asm' (after result::'asm' asm)) <>
-  { 'asm': [] 'offset': 0 }
-  (reverse (zip params (gen-range shift (+ (len params) shift)))))::'asm')
+  { 'asm': [] 'offset': 0 'regs-used': regs-used }
+  (reverse params))::'asm')
 
 (let min \a b ->
   (if (< b a)
@@ -311,10 +310,10 @@
       \i ->
         (join ['  pop ' LINUX-x86_64-FASM-PROC-PARAM-REGS::TYPE-PTR::i::'name' '\n'] '') <>
       (reverse common-args)))
-  (let stack-usage (proc-params-get-stack-usage-linux-x86_64-fasm instr::'args' meta 0))
-  (let args-asm (proc-params-gen-asm-linux-x86_64-fasm instr::'args' meta 0 stack-usage))
-  (let alignment (get-alignment stack-usage 16))
-  (let real-stack-usage (+ stack-usage alignment))
+  (let stats (proc-params-get-stats-linux-x86_64-fasm instr::'args' meta 0))
+  (let args-asm (proc-params-gen-asm-linux-x86_64-fasm instr::'args' meta 0 stats))
+  (let alignment (get-alignment stats::'stack-usage' 16))
+  (let real-stack-usage (+ stats::'stack-usage' alignment))
   (let sub
     (if (> real-stack-usage 0)
       (join ['  sub rsp,' (to-str real-stack-usage) '\n'] '')
@@ -357,10 +356,10 @@
       1
      else
       0))
-  (let stack-usage (proc-params-get-stack-usage-linux-x86_64-fasm instr::'args' meta params-shift))
-  (let args-asm (proc-params-gen-asm-linux-x86_64-fasm instr::'args' meta params-shift stack-usage))
-  (let alignment (get-alignment stack-usage 16))
-  (let real-stack-usage (+ stack-usage alignment))
+  (let stats (proc-params-get-stats-linux-x86_64-fasm instr::'args' meta params-shift))
+  (let args-asm (proc-params-gen-asm-linux-x86_64-fasm instr::'args' meta params-shift stats))
+  (let alignment (get-alignment stats::'stack-usage' 16))
+  (let real-stack-usage (+ stats::'stack-usage' alignment))
   (let lea
     (if (== dest-var::'type'::'type' TYPE-STRUCT)
       (join ['  lea rdi,' dest-var::'loc' '\n'] '')

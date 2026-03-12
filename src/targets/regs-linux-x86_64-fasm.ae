@@ -143,3 +143,17 @@
   TYPE-PTR:    'rdx'
   TYPE-STRUCT: 'rdx'
 })
+
+(let LINUX-x86_64-FASM-TYPE-MASK-MAP {
+  TYPE-UNIT:   0
+  TYPE-S8:     0
+  TYPE-S16:    0
+  TYPE-S32:    0
+  TYPE-S64:    0
+  TYPE-U8:     0
+  TYPE-U16:    0
+  TYPE-U32:    0
+  TYPE-U64:    0
+  TYPE-PTR:    0
+  TYPE-STRUCT: 0
+})

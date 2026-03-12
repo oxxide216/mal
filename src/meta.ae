@@ -90,6 +90,7 @@
     'strs-count': 0
     'stack-size': 0
     'params-stack-size': 0
+    'types': types
   })
 
 (let init-meta-gen \ir types meta ->
