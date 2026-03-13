@@ -299,7 +299,7 @@
     a))
 
 (let call-gen-asm-linux-x86_64-fasm \instr meta ->
-  (let common-args (gen-range 0 (min (len instr::'args') (len meta::'param-types'))))
+  (let common-args (gen-range 0 (len instr::'args')))
   (let common-args-push
     (map
       \i ->
@@ -339,7 +339,7 @@
     ''))
 
 (let call-assign-gen-asm-linux-x86_64-fasm \instr meta ->
-  (let common-args (gen-range 0 (min (len instr::'args') (len meta::'param-types'))))
+  (let common-args (gen-range 0 (len instr::'args')))
   (let common-args-push
     (map
       \i ->
