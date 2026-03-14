@@ -187,6 +187,11 @@
         (skip-token TT-DOT)
         (name-token TT-IDENT 'member-name')
       ])
+      (parse-node 'ptr-member' [
+        (name-token TT-IDENT 'struct-name')
+        (skip-token TT-ARROW)
+        (name-token TT-IDENT 'member-name')
+      ])
       (parse-node 'var' [
         (name-token TT-IDENT 'name')
       ])

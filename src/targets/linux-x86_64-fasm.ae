@@ -60,7 +60,34 @@
       (do
         (let id (to-str meta::'str-ids'::(do arg::'value')))
         (join [ meta::'name' '@str' id] ''))
-    ARG-VAR    => meta::'vars'::(do arg::'value')::'loc'))
+    ARG-VAR    => meta::'vars'::(do arg::'value')::'loc'
+    ARG-MEMBER =>
+      (do
+        (let struct-var meta::'vars'::(do arg::'value'::'struct'))
+        (let struct-var meta::'vars'::(do arg::'value'::'struct'))
+        (let fields
+          (if arg::'value'::'is-ptr'
+            struct-var::'type'::'value'::'value'::'fields'
+           else
+            struct-var::'type'::'value'::'fields'))
+        (let field-with-index
+          (for field-with-index in (zip fields (gen-range 0 (len fields)))
+            (if (== field-with-index::0::'name' arg::'value'::'member')
+              (ret field-with-index))))
+        (let field field-with-index::0)
+        (let index field-with-index::1)
+        (let prev (get-range fields 0 index))
+        (let sizes (map \field -> (get-type-size field::'type') <> prev))
+        (let relative-offset (fold + 0 sizes))
+
+        (if arg::'value'::'is-ptr'
+          (join ['[' struct-var::'loc' '+' (to-str relative-offset) ']'] '')
+         else
+          (let global-offset (+ struct-var::'stack-offset' relative-offset))
+          (get-stack-loc-linux-x86_64-fasm
+            field::'type'::'type'
+            global-offset
+            (not-unit? struct-var::'param-index'))))))
 
 (let arg-gen-asm-type-linux-x86_64-fasm \arg type meta ->
   (match arg::'type'
@@ -83,26 +110,29 @@
     ARG-MEMBER =>
       (do
         (let struct-var meta::'vars'::(do arg::'value'::'struct'))
-        (let fields struct-var::'type'::'value'::'fields')
-
+        (let fields
+          (if arg::'value'::'is-ptr'
+            struct-var::'type'::'value'::'value'::'fields'
+           else
+            struct-var::'type'::'value'::'fields'))
         (let field-with-index
           (for field-with-index in (zip fields (gen-range 0 (len fields)))
             (if (== field-with-index::0::'name' arg::'value'::'member')
               (ret field-with-index))))
-
         (let field field-with-index::0)
         (let index field-with-index::1)
-
         (let prev (get-range fields 0 index))
         (let sizes (map \field -> (get-type-size field::'type') <> prev))
         (let relative-offset (fold + 0 sizes))
 
-        (let global-offset (+ struct-var::'stack-offset' relative-offset))
-
-        (get-stack-loc-linux-x86_64-fasm
-          field::'type'::'type'
-          global-offset
-          (not-unit? struct-var::'param-index')))))
+        (if arg::'value'::'is-ptr'
+          (join ['[' struct-var::'loc' '+' (to-str relative-offset) ']'] '')
+         else
+          (let global-offset (+ struct-var::'stack-offset' relative-offset))
+          (get-stack-loc-linux-x86_64-fasm
+            type
+            global-offset
+            (not-unit? struct-var::'param-index'))))))
 
 (let move-linux-x86_64-fasm \dest-loc dest-stack-offset arg type meta deref ->
   (let arg-loc (arg-gen-asm-type-linux-x86_64-fasm arg type::'type' meta))
@@ -222,7 +252,11 @@
       ARG-MEMBER =>
         (do
           (let struct-var meta::'vars'::(do arg::'value'::'struct'))
-          (let fields struct-var::'type'::'value'::'fields')
+          (let fields
+            (if arg::'value'::'is-ptr'
+              struct-var::'type'::'value'::'value'::'fields'
+             else
+              struct-var::'type'::'value'::'fields'))
 
           (for field in fields
             (if (== field::'name' arg::'value'::'member')
@@ -443,7 +477,19 @@
     ARG-VAR    =>
       (do
         (let var meta::'vars'::(do arg::'value'))
-        (is-signed-type? var::'type'))))
+        (is-signed-type? var::'type'))
+    ARG-MEMBER =>
+      (do
+        (let struct-var meta::'vars'::(do arg::'value'::'struct'))
+        (let fields
+          (if arg::'value'::'is-ptr'
+            struct-var::'type'::'value'::'value'::'fields'
+           else
+            struct-var::'type'::'value'::'fields'))
+
+        (for field in fields
+          (if (== field::'name' arg::'value'::'member')
+            (ret (is-signed-type? field::'type')))))))
 
 (let cond-jump-gen-asm-linux-x86_64-fasm \instr gen not ->
   (let lhs (arg-gen-asm-linux-x86_64-fasm instr::'args'::0 gen::'meta'))

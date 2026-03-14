@@ -243,9 +243,31 @@
             (let type gen::'meta'::'vars'::struct-name::'type')
 
             (let field
-              (for field in type::'value'::'fields'
-                (if (== field::'name' member-name)
-                  (ret field))))
+              (if arg::'value'::'is-ptr'
+                (if (or (!= type::'type' TYPE-PTR)
+                        (!= type::'value'::'type' TYPE-STRUCT))
+                  (error 'Member getting target is not a pointer to a structure')
+                  (set gen::'meta'::'has-errors' true)
+                  {
+                    'type': TYPE-UNIT
+                    'value': unit
+                  }
+                 else
+                  (for field in type::'value'::'value'::'fields'
+                    (if (== field::'name' member-name)
+                      (ret field))))
+               else
+                  (if (!= type::'type' TYPE-STRUCT)
+                    (error 'Member getting target is not a structure')
+                    (set gen::'meta'::'has-errors' true)
+                    {
+                      'type': TYPE-UNIT
+                      'value': unit
+                    }
+                   else
+                    (for field in type::'value'::'fields'
+                      (if (== field::'name' member-name)
+                        (ret field))))))
 
             (if (unit? field)
               (error 'Type ' type::'value'::'name' ' has no member ' member-name)

@@ -40,6 +40,18 @@
       'value': {
         'struct': expr::'expr'::'member'::'struct-name'
         'member': expr::'expr'::'member'::'member-name'
+        'is-ptr': false
+      }
+      'cast':
+        (if expr::'expr'::'cast'
+          expr::'expr'::'cast'::'type')
+    }
+    (not-unit? expr::'expr'::'ptr-member') => {
+      'type': ARG-MEMBER
+      'value': {
+        'struct': expr::'expr'::'ptr-member'::'struct-name'
+        'member': expr::'expr'::'ptr-member'::'member-name'
+        'is-ptr': true
       }
       'cast':
         (if expr::'expr'::'cast'
