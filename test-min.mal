@@ -3,7 +3,7 @@ extern proc exit(code: s32) -> s32
 proc main()
   let x = 5
   let y = x
-  y = 2 + y * 2
+  y = (2 + y) * 2
   let str = "Hello, World!\n"
   #exit(0)
   retval y

@@ -256,9 +256,12 @@ static Type *compile_proc_call(Parser *parser, Compiler *compiler, Token *name) 
   return NULL;
 }
 
+static Type *compile_add_expr(Parser *parser, Compiler *compiler, Dest dest);
+
 static Type *compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest) {
-  Token *token = expect_token(parser, "identifier, integer or string",
-                              MASK(TT_INT) | MASK(TT_STR) | MASK(TT_IDENT));
+  Token *token = expect_token(parser, "identifier, integer, string or `(`",
+                              MASK(TT_INT) | MASK(TT_STR) |
+                              MASK(TT_IDENT) | MASK(TT_OPAREN));
   if (parser->has_error)
     return NULL;
 
@@ -301,6 +304,10 @@ static Type *compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest)
              STR_ARG(token->lexeme));
       return NULL;
     }
+  } else if (token->id == TT_OPAREN) {
+    Type *type = compile_add_expr(parser, compiler, dest);
+    expect_token(parser, "`)`", MASK(TT_CPAREN));
+    return type;
   }
 
   return NULL;
