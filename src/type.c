@@ -58,3 +58,17 @@ u32 type_get_size(Type *type) {
   default:           return 0;
   }
 }
+
+bool type_is_signed(Type *type) {
+  return type->kind >= TypeKindS8 && type->kind <= TypeKindS64;
+}
+
+bool types_can_add(Type *a, Type *b) {
+  return a->kind >= TypeKindS8 && a->kind <= TypeKindPtr &&
+         b->kind >= TypeKindS8 && b->kind <= TypeKindS64;
+}
+
+bool types_can_mul(Type *a, Type *b) {
+  return a->kind >= TypeKindS8 && a->kind <= TypeKindS64 &&
+         b->kind >= TypeKindS8 && b->kind <= TypeKindS64;
+}

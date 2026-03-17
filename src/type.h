@@ -27,4 +27,9 @@ Type *type_clone(Type *type);
 void  type_free(Type *type);
 u32   type_get_size(Type *type);
 
+bool type_is_signed(Type *type);
+
+bool types_can_add(Type *a, Type *b);
+bool types_can_mul(Type *a, Type *b);
+
 #endif // TYPE_H
