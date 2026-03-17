@@ -37,6 +37,7 @@ int main(i32 argc, char **argv) {
   };
 
   bool success = compile(code, input_path, output_file);
+  free(code.ptr);
   fclose(output_file);
   if (!success)
     return 1;

@@ -31,7 +31,23 @@ bool type_eq(Type *a, Type *b) {
            type_eq(a->target, b->target));
 }
 
-u32 get_type_size(Type *type) {
+Type *type_clone(Type *type) {
+  Type *new_type = malloc(sizeof(Type));
+  new_type->kind = type->kind;
+  if (type->target)
+    new_type->target = type_clone(type->target);
+  else
+    new_type->target = NULL;
+  return new_type;
+}
+
+void type_free(Type *type) {
+  if (type->target)
+    type_free(type->target);
+  free(type);
+}
+
+u32 type_get_size(Type *type) {
   switch (type->kind) {
   case TypeKindUnit: return 0;
   case TypeKindS8:   return 1;

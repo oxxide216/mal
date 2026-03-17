@@ -23,6 +23,8 @@ struct Type {
 Type *type_new(TypeKind kind, Type *target);
 void  type_print(FILE *stream, Type *type);
 bool  type_eq(Type *a, Type *b);
-u32   get_type_size(Type *type);
+Type *type_clone(Type *type);
+void  type_free(Type *type);
+u32   type_get_size(Type *type);
 
 #endif // TYPE_H

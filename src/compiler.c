@@ -49,11 +49,14 @@ typedef struct {
 
 typedef Da(NamedType) NamedTypes;
 
+typedef Da(Type *) Types;
+
 typedef struct {
   Vars           vars;
   Strs           strs;
   Procs          procs;
   NamedTypes     named_types;
+  Types          param_types;
   u32            stack_size;
   FILE          *output_file;
   StringBuilder  temp_sb;
@@ -117,7 +120,10 @@ static u32 get_size_on_stack(u32 size) {
 static Type *compile_expr(Parser *parser, Compiler *compiler, Dest dest);
 
 static Type *compile_proc_call(Parser *parser, Compiler *compiler, Token *name) {
-  Da(Type *) param_types = {0};
+  for (u32 i = 0; i < compiler->param_types.len; ++i)
+    type_free(compiler->param_types.items[i]);
+
+  compiler->param_types.len = 0;
   u32 params_size = 0;
 
   Token *token = peek_token(parser);
@@ -137,8 +143,8 @@ static Type *compile_proc_call(Parser *parser, Compiler *compiler, Token *name) 
     fprintf(compiler->output_file, "  push %s\n", loc);
 
     token = peek_token(parser);
-    DA_APPEND(param_types, type);
-    params_size += get_size_on_stack(get_type_size(type));
+    DA_APPEND(compiler->param_types, type);
+    params_size += get_size_on_stack(type_get_size(type));
   }
 
   expect_token(parser, "`)`", MASK(TT_CPAREN));
@@ -148,28 +154,31 @@ static Type *compile_proc_call(Parser *parser, Compiler *compiler, Token *name) 
   for (u32 i = 0; i < compiler->procs.len; ++i) {
     Proc *proc = compiler->procs.items + i;
 
-    if (str_eq(proc->name, name->lexeme)) {
-      if (proc->params.len != param_types.len)
-        continue;
+    if (!str_eq(proc->name, name->lexeme))
+      continue;
 
-      bool found = true;
+    if (proc->params.len != compiler->param_types.len)
+      continue;
 
-      for (u32 j = 0; j < proc->params.len; ++j) {
-        Param *param = proc->params.items + j;
+    bool found = true;
 
-        if (!type_eq(param->type, param_types.items[j])) {
-          found = false;
-          break;
-        }
-      }
+    for (u32 j = 0; j < proc->params.len; ++j) {
+      Param *param = proc->params.items + j;
 
-      if (found) {
-        fprintf(compiler->output_file, "  call $"STR_FMT"\n", STR_ARG(name->lexeme));
-        if (params_size > 0)
-          fprintf(compiler->output_file, "  add rsp,%u\n", params_size);
-        return proc->return_type;
+      if (!type_eq(param->type, compiler->param_types.items[j])) {
+        found = false;
+        break;
       }
     }
+
+    if (!found)
+      continue;
+
+    fprintf(compiler->output_file, "  call $"STR_FMT"\n", STR_ARG(name->lexeme));
+    if (params_size > 0)
+      fprintf(compiler->output_file, "  add rsp,%u\n", params_size);
+
+    return proc->return_type;
   }
 
   parser->has_error = true;
@@ -177,10 +186,10 @@ static Type *compile_proc_call(Parser *parser, Compiler *compiler, Token *name) 
          STR_ARG(parser->file_path),
          name->row + 1, name->col + 1,
          STR_ARG(name->lexeme));
-  for (u32 i = 0; i < param_types.len; ++i) {
+  for (u32 i = 0; i < compiler->param_types.len; ++i) {
     if (i > 0)
       fprintf(stderr, ", ");
-    type_print(stderr, param_types.items[i]);
+    type_print(stderr, compiler->param_types.items[i]);
   }
   fprintf(stderr, ")`\n");
 
@@ -212,14 +221,12 @@ static Type *compile_expr(Parser *parser, Compiler *compiler, Dest dest) {
     Type *type = type_new(TypeKindS32, NULL);
     char *loc = get_dest_loc(dest, type);
     fprintf(compiler->output_file, "  mov %s, "STR_FMT"\n", loc, STR_ARG(token->lexeme));
-    free(type);
 
-    return type_new(TypeKindS32, NULL);
+    return type;
   } else if (token->id == TT_STR) {
-    Type *type = type_new(TypeKindPtr, NULL);
+    Type *type = type_new(TypeKindPtr, type_new(TypeKindS8, NULL));
     char *loc = get_dest_loc(dest, type);
     fprintf(compiler->output_file, "  lea %s, [str@%u]\n", loc, compiler->strs.len);
-    free(type);
 
     sb_push(&compiler->temp_sb, "str@");
     sb_push_u32(&compiler->temp_sb, compiler->strs.len);
@@ -229,7 +236,7 @@ static Type *compile_expr(Parser *parser, Compiler *compiler, Dest dest) {
 
     compiler->temp_sb.len = 0;
 
-    return type_new(TypeKindPtr, type_new(TypeKindS8, NULL));
+    return type;
   } else if (token->id == TT_IDENT) {
     Token *next = peek_token(parser);
     if (next && next->id == TT_OPAREN) {
@@ -241,7 +248,7 @@ static Type *compile_expr(Parser *parser, Compiler *compiler, Dest dest) {
           char *loc = get_dest_loc(dest, var->type);
           fprintf(compiler->output_file, "  mov %s,[rbp-%u]\n", loc, var->offset);
 
-          return var->type;
+          return type_clone(var->type);
         }
       }
 
@@ -281,7 +288,7 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
       char *loc = get_dest_loc(DestReturn, type);
       fprintf(compiler->output_file, "  push %s\n", loc);
 
-      compiler->stack_size += get_size_on_stack(get_type_size(type));
+      compiler->stack_size += get_size_on_stack(type_get_size(type));
 
       Var new_var = {
         name->lexeme,
@@ -293,7 +300,7 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
       if ((token = peek_token(parser)) && token->id != TT_END)
         fprintf(compiler->output_file, "  jmp .end\n");
     } else if (token->id == TT_RETVAL) {
-      compile_expr(parser, compiler, DestReturn);
+      type_free(compile_expr(parser, compiler, DestReturn));
       if ((token = peek_token(parser)) && token->id != TT_END)
         fprintf(compiler->output_file, "  jmp .end\n");
     } else if (token->id == TT_IDENT) {
@@ -325,6 +332,8 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
 
         char *loc = get_dest_loc(DestReturn, type);
         fprintf(compiler->output_file, "  mov [rbp-%u],%s\n", var->offset, loc);
+
+        type_free(type);
       } else if (next && next->id == TT_OPAREN) {
         compile_proc_call(parser, compiler, token);
         if (parser->has_error)
@@ -345,7 +354,7 @@ static Type *compile_type(Parser *parser, Compiler *compiler) {
 
   for (u32 i = 0; i < compiler->named_types.len; ++i)
     if (str_eq(compiler->named_types.items[i].name, token->lexeme))
-      return compiler->named_types.items[i].type;
+      return type_clone(compiler->named_types.items[i].type);
 
   parser->has_error = true;
   PERROR(STR_FMT":%u:%u: ", "Undeclared type `"STR_FMT"`\n",
@@ -378,20 +387,20 @@ static Proc compile_proc_decl(Parser *parser, Compiler *compiler) {
     } else {
       expect_token(parser, "`,`", MASK(TT_COMMA));
       if (parser->has_error)
-        return proc;
+        break;
     }
 
     Token *param_name = expect_token(parser, "identifier", MASK(TT_IDENT));
     if (parser->has_error)
-      return proc;
+      break;
 
     expect_token(parser, "`:`", MASK(TT_COLON));
     if (parser->has_error)
-      return proc;
+      break;
 
     Type *param_type = compile_type(parser, compiler);
     if (parser->has_error)
-      return proc;
+      break;
 
     Param new_param = {
       param_name->lexeme,
@@ -402,9 +411,18 @@ static Proc compile_proc_decl(Parser *parser, Compiler *compiler) {
     token = peek_token(parser);
   }
 
-  expect_token(parser, "`)`", MASK(TT_CPAREN));
-  if (parser->has_error)
+  if (parser->has_error) {
+    if (proc.params.items)
+      free(proc.params.items);
     return proc;
+  }
+
+  expect_token(parser, "`)`", MASK(TT_CPAREN));
+  if (parser->has_error) {
+    if (proc.params.items)
+      free(proc.params.items);
+    return proc;
+  }
 
   token = peek_token(parser);
   if (token && token->id == TT_ARROW) {
@@ -415,6 +433,42 @@ static Proc compile_proc_decl(Parser *parser, Compiler *compiler) {
   }
 
   return proc;
+}
+
+static void cleanup(Parser *parser, Compiler *compiler) {
+  for (u32 i = 0; i < parser->tokens.len; ++i)
+    free(parser->tokens.items[i].lexeme.ptr);
+
+  for (u32 i = 0; i < compiler->procs.len; ++i) {
+    Proc *proc = compiler->procs.items + i;
+
+    for (u32 j = 0; j < proc->params.len; ++j)
+      type_free(proc->params.items[j].type);
+    if (proc->params.items)
+      free(proc->params.items);
+    type_free(proc->return_type);
+  }
+
+  for (u32 i = 0; i < compiler->named_types.len; ++i)
+    type_free(compiler->named_types.items[i].type);
+
+  for (u32 i = 0; i < compiler->param_types.len; ++i)
+    type_free(compiler->param_types.items[i]);
+
+  if (parser->tokens.items)
+    free(parser->tokens.items);
+  if (compiler->vars.items)
+    free(compiler->vars.items);
+  if (compiler->strs.items)
+    free(compiler->strs.items);
+  if (compiler->procs.items)
+    free(compiler->procs.items);
+  if (compiler->named_types.items)
+    free(compiler->named_types.items);
+  if (compiler->param_types.items)
+    free(compiler->param_types.items);
+  if (compiler->temp_sb.buffer)
+    free(compiler->temp_sb.buffer);
 }
 
 bool compile(Str code, Str file_path, FILE *output_file) {
@@ -459,13 +513,17 @@ bool compile(Str code, Str file_path, FILE *output_file) {
   Token *token = NULL;
   while ((token = peek_token(&parser))) {
     expect_token(&parser, "procedure", MASK(TT_PROC) | MASK(TT_EXTERN));
-    if (parser.has_error)
+    if (parser.has_error) {
+      cleanup(&parser, &compiler);
       return false;
+    }
 
     if (token->id == TT_PROC) {
       Proc new_proc = compile_proc_decl(&parser, &compiler);
-      if (parser.has_error)
+      if (parser.has_error) {
+        cleanup(&parser, &compiler);
         return false;
+      }
 
       DA_APPEND(compiler.procs, new_proc);
 
@@ -475,24 +533,37 @@ bool compile(Str code, Str file_path, FILE *output_file) {
       fprintf(output_file, "  mov rbp,rsp\n");
 
       compile_instrs(&parser, &compiler);
-      if (parser.has_error)
+
+      for (u32 i = 0; i < compiler.vars.len; ++i)
+        type_free(compiler.vars.items[i].type);
+      compiler.vars.len = 0;
+
+      if (parser.has_error) {
+        cleanup(&parser, &compiler);
         return false;
+      }
 
       fprintf(output_file, ".end:\n");
       fprintf(output_file, "  leave\n");
       fprintf(output_file, "  ret\n");
 
       expect_token(&parser, "`end`", MASK(TT_END));
-      if (parser.has_error)
+      if (parser.has_error) {
+        cleanup(&parser, &compiler);
         return false;
+      }
     } else if (token->id == TT_EXTERN) {
       expect_token(&parser, "`proc`", MASK(TT_PROC));
-      if (parser.has_error)
+      if (parser.has_error) {
+        cleanup(&parser, &compiler);
         return false;
+      }
 
       Proc new_proc = compile_proc_decl(&parser, &compiler);
-      if (parser.has_error)
+      if (parser.has_error) {
+        cleanup(&parser, &compiler);
         return false;
+      }
 
       DA_APPEND(compiler.procs, new_proc);
 
@@ -515,23 +586,7 @@ bool compile(Str code, Str file_path, FILE *output_file) {
     fprintf(output_file, ",0\n");
   }
 
-  for (u32 i = 0; i < tokens.len; ++i)
-    free(tokens.items[i].lexeme.ptr);
-
-  if (tokens.items)
-    free(tokens.items);
-  if (compiler.vars.items)
-    free(compiler.vars.items);
-  if (compiler.strs.items)
-    free(compiler.strs.items);
-  if (compiler.procs.items)
-    free(compiler.procs.items);
-  if (compiler.named_types.items)
-    free(compiler.named_types.items);
-  if (temp_sb.buffer)
-    free(temp_sb.buffer);
+  cleanup(&parser, &compiler);
 
   return true;
 }
-
-// TODO: fix type memory leaks
