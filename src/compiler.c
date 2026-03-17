@@ -61,6 +61,7 @@ typedef struct {
   Types          param_types;
   u32            stack_size;
   FILE          *output_file;
+  Type          *current_proc_return_type;
   StringBuilder  temp_sb;
 } Compiler;
 
@@ -113,8 +114,8 @@ static char *get_dest_loc(Dest dest, Type *type) {
   } else if (dest == DestTemp0) {
     switch (type->kind) {
     case TypeKindUnit: return NULL;
-    case TypeKindS8:   return "bl";
-    case TypeKindS16:  return "bl";
+    case TypeKindS8:   return "bx";
+    case TypeKindS16:  return "bx";
     case TypeKindS32:  return "rbx";
     case TypeKindS64:  return "rbx";
     case TypeKindPtr:  return "rbx";
@@ -122,8 +123,8 @@ static char *get_dest_loc(Dest dest, Type *type) {
   } else if (dest == DestTemp1) {
     switch (type->kind) {
     case TypeKindUnit: return NULL;
-    case TypeKindS8:   return "r12b";
-    case TypeKindS16:  return "r12b";
+    case TypeKindS8:   return "r12w";
+    case TypeKindS16:  return "r12w";
     case TypeKindS32:  return "r12";
     case TypeKindS64:  return "r12";
     case TypeKindPtr:  return "r12";
@@ -131,8 +132,8 @@ static char *get_dest_loc(Dest dest, Type *type) {
   } else if (dest == DestTemp2) {
     switch (type->kind) {
     case TypeKindUnit: return NULL;
-    case TypeKindS8:   return "r13b";
-    case TypeKindS16:  return "r13b";
+    case TypeKindS8:   return "r13w";
+    case TypeKindS16:  return "r13w";
     case TypeKindS32:  return "r13";
     case TypeKindS64:  return "r13";
     case TypeKindPtr:  return "r13";
@@ -140,8 +141,8 @@ static char *get_dest_loc(Dest dest, Type *type) {
   } else if (dest == DestRem) {
     switch (type->kind) {
     case TypeKindUnit: return NULL;
-    case TypeKindS8:   return "dl";
-    case TypeKindS16:  return "dl";
+    case TypeKindS8:   return "dx";
+    case TypeKindS16:  return "dx";
     case TypeKindS32:  return "rdx";
     case TypeKindS64:  return "rdx";
     case TypeKindPtr:  return "rdx";
@@ -157,6 +158,28 @@ static u32 get_size_on_stack(u32 size) {
   case 4:  return 8;
   default: return size;
   }
+}
+
+static Type *compile_type(Parser *parser, Compiler *compiler) {
+  Token *token = expect_token(parser, "`&` or identifier",
+                              MASK(TT_AMP) | MASK(TT_IDENT));
+  if (parser->has_error)
+    return NULL;
+
+  if (token->id == TT_AMP)
+    return type_new(TypeKindPtr, compile_type(parser, compiler));
+
+  for (u32 i = 0; i < compiler->named_types.len; ++i)
+    if (str_eq(compiler->named_types.items[i].name, token->lexeme))
+      return type_clone(compiler->named_types.items[i].type);
+
+  parser->has_error = true;
+  PERROR(STR_FMT":%u:%u: ", "Undeclared type `"STR_FMT"`\n",
+         STR_ARG(parser->file_path),
+         token->row + 1, token->col + 1,
+         STR_ARG(token->lexeme));
+
+  return NULL;
 }
 
 static Type *compile_expr(Parser *parser, Compiler *compiler, Dest dest);
@@ -271,7 +294,7 @@ static Var *get_var(Parser *parser, Compiler *compiler, Token *name) {
 
 static Type *compile_add_expr(Parser *parser, Compiler *compiler, Dest dest);
 
-static Type *compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest) {
+static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest) {
   Token *token = peek_token(parser);
   if (token->id == TT_AMP || token->id == TT_STAR) {
     next_token(parser);
@@ -364,6 +387,35 @@ static Type *compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest)
   }
 
   return NULL;
+}
+
+static Type *compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest) {
+  Type *type = _compile_primary_expr(parser, compiler, dest);
+
+  Token *token = peek_token(parser);
+  if (token && token->id == TT_AS) {
+    next_token(parser);
+
+    Type *new_type = compile_type(parser, compiler);
+
+    if (!types_can_cast(type, new_type)) {
+      parser->has_error = true;
+      PERROR(STR_FMT":%u:%u: ", "Cannot cast ",
+             STR_ARG(parser->file_path),
+             token->row + 1, token->col + 1);
+      type_print(stderr, type);
+      fprintf(stderr, " -> ");
+      type_print(stderr, new_type);
+      fprintf(stderr, "\n");
+      return NULL;
+    }
+
+    type_free(type);
+
+    return new_type;
+  }
+
+  return type;
 }
 
 // mul, div, mod
@@ -542,7 +594,20 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
       if ((token = peek_token(parser)) && token->id != TT_END)
         fprintf(compiler->output_file, "  jmp .end\n");
     } else if (token->id == TT_RETVAL) {
-      type_free(compile_expr(parser, compiler, DestReturn));
+      Type *type = compile_expr(parser, compiler, DestReturn);
+
+      if (!type_eq(type, compiler->current_proc_return_type)) {
+        parser->has_error = true;
+        PERROR(STR_FMT":%u:%u: ", "Unexpected return type: ",
+               STR_ARG(parser->file_path),
+               token->row + 1, token->col + 1);
+        type_print(stderr, type);
+        fprintf(stderr, "\n");
+        return;
+      }
+
+      type_free(type);
+
       if ((token = peek_token(parser)) && token->id != TT_END)
         fprintf(compiler->output_file, "  jmp .end\n");
     } else if (token->id == TT_IDENT) {
@@ -613,28 +678,6 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
               STR_ARG(STR(token->lexeme.ptr + 1, token->lexeme.len - 2)));
     }
   }
-}
-
-static Type *compile_type(Parser *parser, Compiler *compiler) {
-  Token *token = expect_token(parser, "`&` or identifier",
-                              MASK(TT_AMP) | MASK(TT_IDENT));
-  if (parser->has_error)
-    return NULL;
-
-  if (token->id == TT_AMP)
-    return type_new(TypeKindPtr, compile_type(parser, compiler));
-
-  for (u32 i = 0; i < compiler->named_types.len; ++i)
-    if (str_eq(compiler->named_types.items[i].name, token->lexeme))
-      return type_clone(compiler->named_types.items[i].type);
-
-  parser->has_error = true;
-  PERROR(STR_FMT":%u:%u: ", "Undeclared type `"STR_FMT"`\n",
-         STR_ARG(parser->file_path),
-         token->row + 1, token->col + 1,
-         STR_ARG(token->lexeme));
-
-  return NULL;
 }
 
 static Proc compile_proc_decl(Parser *parser, Compiler *compiler) {
@@ -808,6 +851,8 @@ bool compile(Str code, Str file_path, FILE *output_file) {
       fprintf(output_file, "  push rbx\n");
       fprintf(output_file, "  push r12\n");
       fprintf(output_file, "  push r13\n");
+
+      compiler.current_proc_return_type = new_proc.return_type;
 
       compile_instrs(&parser, &compiler);
 

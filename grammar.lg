@@ -8,6 +8,7 @@ let=let
 ret=ret
 retval=retval
 extern=extern
+as=as
 
 assign==
 oparen=\(

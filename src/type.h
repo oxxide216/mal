@@ -31,5 +31,6 @@ bool type_is_signed(Type *type);
 
 bool types_can_add(Type *a, Type *b);
 bool types_can_mul(Type *a, Type *b);
+bool types_can_cast(Type *a, Type *b);
 
 #endif // TYPE_H

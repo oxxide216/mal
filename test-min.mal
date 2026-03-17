@@ -1,6 +1,6 @@
 extern proc exit(code: s32) -> s32
 
-proc main()
+proc main() -> s8
   let x = 5
   let y = x
   y = (2 + y) * 2
@@ -9,5 +9,5 @@ proc main()
   let r = &y
   r := *r + 1
   "; Hiiii! :3"
-  retval y
+  retval y as s8
 end
