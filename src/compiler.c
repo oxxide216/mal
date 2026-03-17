@@ -135,7 +135,7 @@ static u32 compile_expr(Parser *parser, Compiler *compiler, Dest dest) {
       RequiredProc new_required = { token->lexeme, token };
       DA_APPEND(compiler->required_procs, new_required);
 
-      fprintf(compiler->output_file, "  call "STR_FMT"\n", STR_ARG(token->lexeme));
+      fprintf(compiler->output_file, "  call $"STR_FMT"\n", STR_ARG(token->lexeme));
     } else {
       Var *var = NULL;
       for (u32 i = compiler->vars.len; i > 0; --i) {
@@ -155,7 +155,9 @@ static u32 compile_expr(Parser *parser, Compiler *compiler, Dest dest) {
       }
 
       char *loc = get_dest_loc(dest, var->size);
-      fprintf(compiler->output_file, "  mov %s,[rbp-%u]", loc, var->offset);
+      fprintf(compiler->output_file, "  mov %s,[rbp-%u]\n", loc, var->offset);
+
+      return var->size;
     }
   }
 
@@ -236,7 +238,7 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
         RequiredProc new_required = { token->lexeme, token };
         DA_APPEND(compiler->required_procs, new_required);
 
-        fprintf(compiler->output_file, "  call "STR_FMT"\n", STR_ARG(token->lexeme));
+        fprintf(compiler->output_file, "  call $"STR_FMT"\n", STR_ARG(token->lexeme));
       }
     }
   }
@@ -250,9 +252,8 @@ bool compile(Str code, Str file_path, FILE *output_file) {
   compiler.output_file = output_file;
   compiler.temp_sb = temp_sb;
 
-  fprintf(output_file, "format ELF64\n");
-  fprintf(output_file, "section '.text' executable\n");
-  fprintf(output_file, "public _start\n");
+  fprintf(output_file, "section '.text'\n");
+  fprintf(output_file, "global _start\n");
   fprintf(output_file, "_start:\n");
   fprintf(output_file, "  mov rdi,qword[rsp]\n");
   fprintf(output_file, "  lea rsi,qword[rsp+8]\n");
@@ -280,8 +281,8 @@ bool compile(Str code, Str file_path, FILE *output_file) {
       if (parser.has_error)
         return false;
 
-      fprintf(output_file, "public "STR_FMT"\n", STR_ARG(name->lexeme));
-      fprintf(output_file, STR_FMT":\n", STR_ARG(name->lexeme));
+      fprintf(output_file, "global $"STR_FMT"\n", STR_ARG(name->lexeme));
+      fprintf(output_file, "$"STR_FMT":\n", STR_ARG(name->lexeme));
       fprintf(output_file, "  push rbp\n");
       fprintf(output_file, "  mov rbp,rsp\n");
 
@@ -319,10 +320,7 @@ bool compile(Str code, Str file_path, FILE *output_file) {
       Proc new_proc = { name->lexeme };
       DA_APPEND(compiler.procs, new_proc);
 
-      fprintf(output_file, "extrn '"STR_FMT"' as _"STR_FMT"\n",
-              STR_ARG(name->lexeme), STR_ARG(name->lexeme));
-      fprintf(output_file, STR_FMT" = plt _"STR_FMT"\n",
-              STR_ARG(name->lexeme), STR_ARG(name->lexeme));
+      fprintf(output_file, "extern $"STR_FMT"\n", STR_ARG(name->lexeme));
     }
   }
 
