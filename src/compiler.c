@@ -933,12 +933,28 @@ bool compile(Str code, Str file_path, FILE *output_file) {
 
   for (u32 i = 0; i < compiler.strs.len; ++i) {
     Str *str = compiler.strs.items + i;
+    bool is_escaped = false;
 
     fprintf(output_file, "str@%u: db ", i);
     for (u32 j = 1; j + 1 < str->len; ++j) {
+      char ch = str->ptr[j];
+      if (is_escaped) {
+        switch (ch) {
+        case 'n': ch = '\n'; break;
+        case 'r': ch = '\r'; break;
+        case 't': ch = '\t'; break;
+        case 'v': ch = '\v'; break;
+        case 'b': ch = '\b'; break;
+        case '0': ch = '\0'; break;
+        }
+      } else if (ch == '\\') {
+        is_escaped = true;
+        continue;
+      }
+
       if (j > 1)
         fprintf(output_file, ",");
-      fprintf(output_file, "%u", str->ptr[j]);
+      fprintf(output_file, "%u", ch);
     }
     fprintf(output_file, ",0\n");
   }
