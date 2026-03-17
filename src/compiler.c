@@ -105,45 +105,45 @@ static char *get_dest_loc(Dest dest, Type *type) {
   if (dest == DestReturn) {
     switch (type->kind) {
     case TypeKindUnit: return NULL;
-    case TypeKindS8:   return "ax";
+    case TypeKindS8:   return "al";
     case TypeKindS16:  return "ax";
-    case TypeKindS32:  return "rax";
+    case TypeKindS32:  return "eax";
     case TypeKindS64:  return "rax";
     case TypeKindPtr:  return "rax";
     }
   } else if (dest == DestTemp0) {
     switch (type->kind) {
     case TypeKindUnit: return NULL;
-    case TypeKindS8:   return "bx";
+    case TypeKindS8:   return "bl";
     case TypeKindS16:  return "bx";
-    case TypeKindS32:  return "rbx";
+    case TypeKindS32:  return "ebx";
     case TypeKindS64:  return "rbx";
     case TypeKindPtr:  return "rbx";
     }
   } else if (dest == DestTemp1) {
     switch (type->kind) {
     case TypeKindUnit: return NULL;
-    case TypeKindS8:   return "r12w";
+    case TypeKindS8:   return "r12b";
     case TypeKindS16:  return "r12w";
-    case TypeKindS32:  return "r12";
+    case TypeKindS32:  return "r12d";
     case TypeKindS64:  return "r12";
     case TypeKindPtr:  return "r12";
     }
   } else if (dest == DestTemp2) {
     switch (type->kind) {
     case TypeKindUnit: return NULL;
-    case TypeKindS8:   return "r13w";
+    case TypeKindS8:   return "r13b";
     case TypeKindS16:  return "r13w";
-    case TypeKindS32:  return "r13";
+    case TypeKindS32:  return "r13d";
     case TypeKindS64:  return "r13";
     case TypeKindPtr:  return "r13";
     }
   } else if (dest == DestRem) {
     switch (type->kind) {
     case TypeKindUnit: return NULL;
-    case TypeKindS8:   return "dx";
+    case TypeKindS8:   return "dl";
     case TypeKindS16:  return "dx";
-    case TypeKindS32:  return "rdx";
+    case TypeKindS32:  return "edx";
     case TypeKindS64:  return "rdx";
     case TypeKindPtr:  return "rdx";
     }
@@ -152,11 +152,11 @@ static char *get_dest_loc(Dest dest, Type *type) {
   return NULL;
 }
 
-static u32 get_size_on_stack(u32 size) {
-  switch (size) {
-  case 1:  return 2;
-  case 4:  return 8;
-  default: return size;
+static Type *get_type_on_stack(Type *type) {
+  switch (type->kind) {
+  case TypeKindS8:  return type_new(TypeKindS16, NULL);
+  case TypeKindS32: return type_new(TypeKindS64, NULL);
+  default:          return type_clone(type);
   }
 }
 
@@ -207,12 +207,16 @@ static Type *compile_proc_call(Parser *parser, Compiler *compiler, Token *name) 
     if (parser->has_error)
       return NULL;
 
-    char *loc = get_dest_loc(DestTemp0, type);
+    Type *stack_type = get_type_on_stack(type);
+
+    char *loc = get_dest_loc(DestTemp0, stack_type);
     fprintf(compiler->output_file, "  push %s\n", loc);
 
     token = peek_token(parser);
     DA_APPEND(compiler->param_types, type);
-    params_size += get_size_on_stack(type_get_size(type));
+    params_size += type_get_size(stack_type);
+
+    type_free(stack_type);
   }
 
   expect_token(parser, "`)`", MASK(TT_CPAREN));
@@ -306,11 +310,13 @@ static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest
       if (parser->has_error)
         return NULL;
 
-      char *loc = get_dest_loc(dest, var->type);
+      Type *ptr_type = type_new(TypeKindPtr, type_clone(var->type));
+
+      char *loc = get_dest_loc(dest, ptr_type);
       fprintf(compiler->output_file, "  lea %s,[rbp-%u]\n",
               loc, var->offset + CALLE_PRESERVED_REGS_SIZE);
 
-      return type_new(TypeKindPtr, type_clone(var->type));
+      return ptr_type;
     } else if (token->id == TT_STAR) {
       token = expect_token(parser, "identifier", MASK(TT_IDENT));
 
@@ -393,7 +399,7 @@ static Type *compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest)
   Type *type = _compile_primary_expr(parser, compiler, dest);
 
   Token *token = peek_token(parser);
-  if (token && token->id == TT_AS) {
+  while (token && token->id == TT_AS) {
     next_token(parser);
 
     Type *new_type = compile_type(parser, compiler);
@@ -410,9 +416,21 @@ static Type *compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest)
       return NULL;
     }
 
+    char *loc0 = get_dest_loc(dest, type);
+    char *loc1 = get_dest_loc(dest, new_type);
+
+    if (type->kind == TypeKindS8 &&
+        new_type->kind == TypeKindS32)
+      fprintf(compiler->output_file, "  movsx %s,%s\n", loc1, loc0);
+    if (type->kind == TypeKindS32 &&
+        new_type->kind == TypeKindS64)
+      fprintf(compiler->output_file, "  movsxd %s,%s\n", loc1, loc0);
+
     type_free(type);
 
-    return new_type;
+    type = new_type;
+
+    token = peek_token(parser);
   }
 
   return type;
@@ -579,10 +597,14 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
       if (parser->has_error)
         return;
 
-      char *loc = get_dest_loc(DestTemp0, type);
+      Type *stack_type = get_type_on_stack(type);
+
+      char *loc = get_dest_loc(DestTemp0, stack_type);
       fprintf(compiler->output_file, "  push %s\n", loc);
 
-      compiler->stack_size += get_size_on_stack(type_get_size(type));
+      compiler->stack_size += type_get_size(stack_type);
+
+      type_free(stack_type);
 
       Var new_var = {
         name->lexeme,
@@ -639,11 +661,14 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
         if (parser->has_error)
           return;
 
-        char *loc = get_dest_loc(DestTemp0, type);
+        Type *stack_type = get_type_on_stack(type);
+
+        char *loc = get_dest_loc(DestTemp0, stack_type);
         fprintf(compiler->output_file, "  mov [rbp-%u],%s\n",
                 var->offset + CALLE_PRESERVED_REGS_SIZE, loc);
 
         type_free(type);
+        type_free(stack_type);
       } else if (next->id == TT_OPAREN) {
         type_free(compile_proc_call(parser, compiler, token));
         if (parser->has_error)
@@ -667,7 +692,11 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
         if (parser->has_error)
           return;
 
-        char *loc = get_dest_loc(DestTemp0, type);
+        Type *stack_type = get_type_on_stack(type);
+
+        char *loc = get_dest_loc(DestTemp0, stack_type);
+
+        type_free(stack_type);
 
         fprintf(compiler->output_file, "  mov rax,[rbp-%u]\n",
                 var->offset + CALLE_PRESERVED_REGS_SIZE);

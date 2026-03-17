@@ -74,7 +74,5 @@ bool types_can_mul(Type *a, Type *b) {
 }
 
 bool types_can_cast(Type *a, Type *b) {
-  (void) a;
-  (void) b;
-  return true;
+  return b->kind != TypeKindS64 || a->kind == TypeKindS32;
 }
