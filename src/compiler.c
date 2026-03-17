@@ -508,8 +508,9 @@ static Type *compile_expr(Parser *parser, Compiler *compiler, Dest dest) {
 static void compile_instrs(Parser *parser, Compiler *compiler) {
   Token *token = NULL;
   while ((token = peek_token(parser)) && token->id != TT_END) {
-    expect_token(parser, "`let`, `ret`, `retval` or identifier",
-                 MASK(TT_LET) | MASK(TT_RET) | MASK(TT_RETVAL) | MASK(TT_IDENT));
+    expect_token(parser, "`let`, `ret`, `retval`, identifier or string",
+                 MASK(TT_LET) | MASK(TT_RET) | MASK(TT_RETVAL) |
+                 MASK(TT_IDENT) | MASK(TT_STR));
     if (parser->has_error)
       return;
 
@@ -607,6 +608,9 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
                 var->offset + CALLE_PRESERVED_REGS_SIZE);
         fprintf(compiler->output_file, "  mov [rax],%s\n", loc);
       }
+    } else if (token->id == TT_STR) {
+      fprintf(compiler->output_file, "  "STR_FMT"\n",
+              STR_ARG(STR(token->lexeme.ptr + 1, token->lexeme.len - 2)));
     }
   }
 }

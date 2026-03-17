@@ -8,5 +8,6 @@ proc main()
   #exit(0)
   let r = &y
   r := *r + 1
+  "; Hiiii! :3"
   retval y
 end
