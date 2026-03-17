@@ -1,2 +1,8 @@
 /build/
 /mal
+/libs/
+/*.s
+/*.o
+/test
+/test-min
+src/grammar.h

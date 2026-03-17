@@ -1,2 +1,10 @@
 proc main()
+  let x = 5
+  let y = x
+  y = 2
+  let str = "Hello, World!\n"
+  test()
+  retval 77
 end
+
+extern proc test()

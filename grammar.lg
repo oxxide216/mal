@@ -1,0 +1,19 @@
+whitespace=( |\t|\r)*
+newline=\n
+comment=#
+
+proc=proc
+end=end
+let=let
+ret=ret
+retval=retval
+extern=extern
+
+assign==
+oparen=\(
+cparen=\)
+str="|'
+colon=:
+
+int=\-?0-9+
+ident=(_|a-z|A-Z)(_|a-z|A-Z|0-9)*
