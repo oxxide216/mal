@@ -256,12 +256,73 @@ static Type *compile_proc_call(Parser *parser, Compiler *compiler, Token *name) 
   return NULL;
 }
 
+static Var *get_var(Parser *parser, Compiler *compiler, Token *name) {
+  for (u32 i = compiler->vars.len; i > 0; --i)
+    if (str_eq(name->lexeme, compiler->vars.items[i - 1].name))
+      return compiler->vars.items + i - 1;
+
+  parser->has_error = true;
+  PERROR(STR_FMT":%u:%u: ", "Undeclared variable `"STR_FMT"`\n",
+         STR_ARG(parser->file_path),
+         name->row + 1, name->col + 1,
+         STR_ARG(name->lexeme));
+  return NULL;
+}
+
 static Type *compile_add_expr(Parser *parser, Compiler *compiler, Dest dest);
 
 static Type *compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest) {
-  Token *token = expect_token(parser, "identifier, integer, string or `(`",
-                              MASK(TT_INT) | MASK(TT_STR) |
-                              MASK(TT_IDENT) | MASK(TT_OPAREN));
+  Token *token = peek_token(parser);
+  if (token->id == TT_AMP || token->id == TT_STAR) {
+    next_token(parser);
+
+    if (token->id == TT_AMP) {
+      token = expect_token(parser, "identifier", MASK(TT_IDENT));
+
+      Var *var = get_var(parser, compiler, token);
+      if (parser->has_error)
+        return NULL;
+
+      char *loc = get_dest_loc(dest, var->type);
+      fprintf(compiler->output_file, "  lea %s,[rbp-%u]\n",
+              loc, var->offset + CALLE_PRESERVED_REGS_SIZE);
+
+      return type_new(TypeKindPtr, type_clone(var->type));
+    } else if (token->id == TT_STAR) {
+      token = expect_token(parser, "identifier", MASK(TT_IDENT));
+
+      Var *var = get_var(parser, compiler, token);
+      if (parser->has_error)
+        return NULL;
+
+      if (var->type->kind != TypeKindPtr) {
+        parser->has_error = true;
+        PERROR(STR_FMT":%u:%u: ",
+               "Attempt to dereference a non-pointer variable `"STR_FMT"`\n",
+               STR_ARG(parser->file_path),
+               token->row + 1, token->col + 1,
+               STR_ARG(token->lexeme));
+        return NULL;
+      }
+
+      fprintf(compiler->output_file, "  mov rax,[rbp-%u]\n",
+              var->offset + CALLE_PRESERVED_REGS_SIZE);
+      fprintf(compiler->output_file, "  mov rax,[rax]\n");
+
+      if (dest != DestReturn) {
+        char *loc = get_dest_loc(dest, var->type);
+        fprintf(compiler->output_file, "  mov %s,rax\n", loc);
+      }
+
+      return type_clone(var->type->target);
+    }
+
+    token = peek_token(parser);
+  }
+
+  token = expect_token(parser, "identifier, integer, string, `(`, `&` or `*`",
+                       MASK(TT_INT) | MASK(TT_STR) |
+                       MASK(TT_IDENT) | MASK(TT_OPAREN));
   if (parser->has_error)
     return NULL;
 
@@ -286,23 +347,15 @@ static Type *compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest)
     if (next && next->id == TT_OPAREN) {
       return compile_proc_call(parser, compiler, token);
     } else {
-      for (u32 i = compiler->vars.len; i > 0; --i) {
-        if (str_eq(token->lexeme, compiler->vars.items[i - 1].name)) {
-          Var *var = compiler->vars.items + i - 1;
-          char *loc = get_dest_loc(dest, var->type);
-          fprintf(compiler->output_file, "  mov %s,[rbp-%u]\n",
-                  loc, var->offset + CALLE_PRESERVED_REGS_SIZE);
+      Var *var = get_var(parser, compiler, token);
+      if (parser->has_error)
+        return NULL;
 
-          return type_clone(var->type);
-        }
-      }
+      char *loc = get_dest_loc(dest, var->type);
+      fprintf(compiler->output_file, "  mov %s,[rbp-%u]\n",
+              loc, var->offset + CALLE_PRESERVED_REGS_SIZE);
 
-      parser->has_error = true;
-      PERROR(STR_FMT":%u:%u: ", "Undeclared variable `"STR_FMT"`\n",
-             STR_ARG(parser->file_path),
-             token->row + 1, token->col + 1,
-             STR_ARG(token->lexeme));
-      return NULL;
+      return type_clone(var->type);
     }
   } else if (token->id == TT_OPAREN) {
     Type *type = compile_add_expr(parser, compiler, dest);
@@ -492,7 +545,9 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
       if ((token = peek_token(parser)) && token->id != TT_END)
         fprintf(compiler->output_file, "  jmp .end\n");
     } else if (token->id == TT_IDENT) {
-      Token *next = expect_token(parser, "`=` or `(`", MASK(TT_ASSIGN) | MASK(TT_OPAREN));
+      Token *next = expect_token(parser, "`=`, `(` or `:=`",
+                                 MASK(TT_ASSIGN) | MASK(TT_OPAREN) |
+                                 MASK(TT_CASSIGN));
       if (parser->has_error)
         return;
 
@@ -523,10 +578,34 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
                 var->offset + CALLE_PRESERVED_REGS_SIZE, loc);
 
         type_free(type);
-      } else if (next && next->id == TT_OPAREN) {
-        compile_proc_call(parser, compiler, token);
+      } else if (next->id == TT_OPAREN) {
+        type_free(compile_proc_call(parser, compiler, token));
         if (parser->has_error)
           return;
+      } else if (next->id == TT_CASSIGN) {
+        Var *var = get_var(parser, compiler, token);
+        if (parser->has_error)
+          return;
+
+        if (var->type->kind != TypeKindPtr) {
+          parser->has_error = true;
+          PERROR(STR_FMT":%u:%u: ",
+                 "Attempt to deref-assign to a non-pointer variable `"STR_FMT"`\n",
+                 STR_ARG(parser->file_path),
+                 token->row + 1, token->col + 1,
+                 STR_ARG(token->lexeme));
+          return;
+        }
+
+        Type *type = compile_expr(parser, compiler, DestTemp0);
+        if (parser->has_error)
+          return;
+
+        char *loc = get_dest_loc(DestTemp0, type);
+
+        fprintf(compiler->output_file, "  mov rax,[rbp-%u]\n",
+                var->offset + CALLE_PRESERVED_REGS_SIZE);
+        fprintf(compiler->output_file, "  mov [rax],%s\n", loc);
       }
     }
   }

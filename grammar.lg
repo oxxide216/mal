@@ -22,6 +22,7 @@ minus=\-
 star=\*
 slash=/
 perc=%
+cassign=:=
 
 int=\-?0-9+
 ident=(_|a-z|A-Z)(_|a-z|A-Z|0-9)*

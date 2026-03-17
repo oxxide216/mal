@@ -6,5 +6,7 @@ proc main()
   y = (2 + y) * 2
   let str = "Hello, World!\n"
   #exit(0)
+  let r = &y
+  r := *r + 1
   retval y
 end
