@@ -1,0 +1,48 @@
+include "str.mal"
+include "unix.mal"
+include "mem.mal"
+
+proc fprint(fd: s64, str: &s8)
+  let len = strlen(str)
+  write(fd, str, len)
+end
+
+proc fprintln(fd: s64, str: &s8)
+  fprint(fd, str)
+  write(fd, "\n", 1)
+end
+
+proc print(str: &s8)
+  let len = strlen(str)
+  write(1, str, len)
+end
+
+proc println(str: &s8)
+  print(str)
+  write(1, "\n", 1)
+end
+
+proc read_file(path: &s8) -> &s8
+  let STAT_SIZE = 144
+  let STAT_ST_SIZE = 48
+  let O_RDWR = 2
+
+  let stat = malloc(STAT_SIZE)
+
+  stat(path, stat)
+
+  let size = *(stat as &s64 + STAT_ST_SIZE)
+  free(stat)
+
+  let fd = open(path, O_RDWR, 0)
+  if fd < 0
+    retval 0 as &s8
+  end
+
+  let content = malloc(size + 1)
+  read(fd, content, size)
+  let end_ptr = content + size
+  end_ptr := 0
+
+  retval content
+end

@@ -1,0 +1,52 @@
+proc read(fd: s64, buffer: &s8, len: s64)
+  "mov rax,0"
+  "mov rdi,", fd
+  "mov rsi,", buffer
+  "mov rdx,", len
+  "syscall"
+end
+
+proc write(fd: s64, str: &s8, len: s64)
+  "mov rax,1"
+  "mov rdi,", fd
+  "mov rsi,", str
+  "mov rdx,", len
+  "syscall"
+end
+
+proc open(path: &s8, flags: s64, mode: s64) -> s64
+  "mov rax,2"
+  "mov rdi,", path
+  "syscall"
+end
+
+proc close(fd: s64)
+  "mov rax,3"
+  "mov rdi,", fd
+  "syscall"
+end
+
+proc stat(path: &s8, buffer: &s8)
+  "mov rax,4"
+  "mov rdi,", path
+  "mov rsi,", buffer
+  "syscall"
+end
+
+proc mmap(address: &s8, len: s64, prot: s64, flags: s64, fd: s64, offset: s64) -> &s8
+  "mov rax,9"
+  "mov rdi,", address
+  "mov rsi,", len
+  "mov rdx,", prot
+  "mov r10,", flags
+  "mov r8,", fd
+  "mov r9,", offset
+  "syscall"
+end
+
+proc munmap(address: &s8, len: s64)
+  "mov rax,11"
+  "mov rdi,", address
+  "mov rsi,", len
+  "syscall"
+end

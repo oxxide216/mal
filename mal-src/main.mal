@@ -1,29 +1,5 @@
-proc strlen(str: &s8) -> s64
-  let len = 0
-  while *(str + len) != 0 as s8
-    len = len + 1
-  end
-
-  retval len
-end
-
-proc write(fd: s64, str: &s8, len: s64)
-  "mov rax,1"
-  "mov rdi,", fd
-  "mov rsi,", str
-  "mov rdx,", len
-  "syscall"
-end
-
-proc print(str: &s8)
-  let len = strlen(str)
-  write(1, str, len)
-end
-
-proc println(str: &s8)
-  print(str)
-  write(1, "\n", 1)
-end
+include "../std/unix.mal"
+include "../std/io.mal"
 
 proc print_usage(program_name: &s8)
   print("Usage: ")
@@ -32,8 +8,8 @@ proc print_usage(program_name: &s8)
 end
 
 proc error(str: &s8)
-  print("\e[31;1m[ERROR]\e[0m: ")
-  println(str)
+  fprint(2, "\e[31;1m[ERROR]\e[0m: ")
+  fprintln(2, str)
 end
 
 proc main(argc: s64, argv: &&s8) -> s64
@@ -42,4 +18,13 @@ proc main(argc: s64, argv: &&s8) -> s64
     error("No input file")
     retval 1
   end
+
+  let code = read_file(*(argv + 16))
+  if code == 0 as &s8
+    error("Could not open ")
+    fprint(2, *(argv + 16))
+    retval 1
+  end
+
+  print(code)
 end

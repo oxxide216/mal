@@ -1,0 +1,8 @@
+proc strlen(str: &s8) -> s64
+  let len = 0
+  while *(str + len) != 0 as s8
+    len = len + 1
+  end
+
+  retval len
+end
