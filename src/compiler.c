@@ -250,7 +250,7 @@ static Type *compile_proc_call(Parser *parser, Compiler *compiler, Token *name) 
     if (params_size > 0)
       fprintf(compiler->output_file, "  add rsp,%u\n", params_size);
 
-    return proc->return_type;
+    return type_clone(proc->return_type);
   }
 
   parser->has_error = true;
@@ -356,7 +356,7 @@ static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest
     return NULL;
 
   if (token->id == TT_INT) {
-    Type *type = type_new(TypeKindS32, NULL);
+    Type *type = type_new(TypeKindS64, NULL);
     char *loc = get_dest_loc(dest, type);
     fprintf(compiler->output_file, "  mov %s, "STR_FMT"\n", loc, STR_ARG(token->lexeme));
 
