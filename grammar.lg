@@ -24,6 +24,12 @@ star=\*
 slash=/
 perc=%
 cassign=:=
+eq===
+ne=!=
+ls=<
+le=<=
+gt=>
+ge=>=
 
 int=\-?0-9+
 ident=(_|a-z|A-Z)(_|a-z|A-Z|0-9)*

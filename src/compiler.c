@@ -70,6 +70,7 @@ typedef enum {
   DestTemp0,
   DestTemp1,
   DestTemp2,
+  DestTemp3,
   DestRem,
 } Dest;
 
@@ -137,6 +138,15 @@ static char *get_dest_loc(Dest dest, Type *type) {
     case TypeKindS32:  return "r13d";
     case TypeKindS64:  return "r13";
     case TypeKindPtr:  return "r13";
+    }
+  } else if (dest == DestTemp3) {
+    switch (type->kind) {
+    case TypeKindUnit: return NULL;
+    case TypeKindS8:   return "r14b";
+    case TypeKindS16:  return "r14w";
+    case TypeKindS32:  return "r14d";
+    case TypeKindS64:  return "r14";
+    case TypeKindPtr:  return "r14";
     }
   } else if (dest == DestRem) {
     switch (type->kind) {
@@ -475,6 +485,8 @@ static Type *compile_mul_expr(Parser *parser, Compiler *compiler, Dest dest) {
     char *loc2 = get_dest_loc(DestReturn, lhs);
     char *loc3 = get_dest_loc(DestRem, lhs);
 
+    type_free(rhs);
+
     if (dest != DestReturn)
       fprintf(compiler->output_file, "  mov %s,%s\n", loc2, loc0);
 
@@ -545,6 +557,8 @@ static Type *compile_add_expr(Parser *parser, Compiler *compiler, Dest dest) {
     char *loc0 = get_dest_loc(dest, lhs);
     char *loc1 = get_dest_loc(DestTemp1, rhs);
 
+    type_free(rhs);
+
     if (token->id == TT_PLUS)
       fprintf(compiler->output_file, "  add %s,%s\n", loc0, loc1);
     else
@@ -558,13 +572,140 @@ static Type *compile_add_expr(Parser *parser, Compiler *compiler, Dest dest) {
   return lhs;
 }
 
+// ==, !=, <, >, <=, >=
+static Type *compile_cmp_expr(Parser *parser, Compiler *compiler, Dest dest, Str *label) {
+  Type *lhs = compile_add_expr(parser, compiler, dest);
+  if (parser->has_error)
+    return NULL;
+
+  Token *token = peek_token(parser);
+  if (!token)
+    return lhs;
+
+  Type *result = type_new(TypeKindS8, NULL);
+  bool found_cmp = false;
+
+  while (token->id == TT_EQ || token->id == TT_NE || token->id == TT_LS ||
+         token->id == TT_LE || token->id == TT_GT || token->id == TT_GE) {
+    next_token(parser);
+
+    found_cmp = true;
+
+    Type *rhs = compile_add_expr(parser, compiler, DestTemp3);
+    if (parser->has_error)
+      return NULL;
+
+    if (!types_can_add(lhs, rhs)) {
+      parser->has_error = true;
+      PERROR(STR_FMT":%u:%u: ", "Cannot do ",
+             STR_ARG(parser->file_path),
+             token->row + 1, token->col + 1);
+      type_print(stderr, lhs);
+      if (token->id == TT_EQ)
+        fprintf(stderr, " == ");
+      else if (token->id == TT_NE)
+        fprintf(stderr, " != ");
+      else if (token->id == TT_LS)
+        fprintf(stderr, " < ");
+      else if (token->id == TT_LE)
+        fprintf(stderr, " <= ");
+      else if (token->id == TT_GT)
+        fprintf(stderr, " > ");
+      else if (token->id == TT_GE)
+        fprintf(stderr, " >= ");
+      type_print(stderr, rhs);
+      fprintf(stderr, "\n");
+      return NULL;
+    }
+
+    char *loc0 = get_dest_loc(dest, lhs);
+    char *loc1 = get_dest_loc(DestTemp3, rhs);
+    char *loc2 = get_dest_loc(DestReturn, lhs);
+
+    type_free(rhs);
+
+    fprintf(compiler->output_file, "  cmp %s,%s\n", loc0, loc1);
+
+    if (label) {
+      if (type_is_signed(lhs)) {
+        if (token->id == TT_EQ)
+          fprintf(compiler->output_file, "  jne "STR_FMT"\n", STR_ARG(*label));
+        else if (token->id == TT_NE)
+          fprintf(compiler->output_file, "  je "STR_FMT"\n", STR_ARG(*label));
+        else if (token->id == TT_LS)
+          fprintf(compiler->output_file, "  jge "STR_FMT"\n", STR_ARG(*label));
+        else if (token->id == TT_LE)
+          fprintf(compiler->output_file, "  jg "STR_FMT"\n", STR_ARG(*label));
+        else if (token->id == TT_GT)
+          fprintf(compiler->output_file, "  jle "STR_FMT"\n", STR_ARG(*label));
+        else if (token->id == TT_GE)
+          fprintf(compiler->output_file, "  jl "STR_FMT"\n", STR_ARG(*label));
+      } else {
+        if (token->id == TT_EQ)
+          fprintf(compiler->output_file, "  jne "STR_FMT"\n", STR_ARG(*label));
+        else if (token->id == TT_NE)
+          fprintf(compiler->output_file, "  je "STR_FMT"\n", STR_ARG(*label));
+        else if (token->id == TT_LS)
+          fprintf(compiler->output_file, "  jae "STR_FMT"\n", STR_ARG(*label));
+        else if (token->id == TT_LE)
+          fprintf(compiler->output_file, "  ja "STR_FMT"\n", STR_ARG(*label));
+        else if (token->id == TT_GT)
+          fprintf(compiler->output_file, "  jbe "STR_FMT"\n", STR_ARG(*label));
+        else if (token->id == TT_GE)
+          fprintf(compiler->output_file, "  jb "STR_FMT"\n", STR_ARG(*label));
+      }
+    } else {
+      fprintf(compiler->output_file, "  mov %s,0\n", loc0);
+      fprintf(compiler->output_file, "  mov %s,1\n", loc2);
+      if (type_is_signed(lhs)) {
+        if (token->id == TT_EQ)
+          fprintf(compiler->output_file, "  cmove %s,%s\n", loc0, loc2);
+        else if (token->id == TT_NE)
+          fprintf(compiler->output_file, "  cmovne %s,%s\n", loc0, loc2);
+        else if (token->id == TT_LS)
+          fprintf(compiler->output_file, "  cmovl %s,%s\n", loc0, loc2);
+        else if (token->id == TT_LE)
+          fprintf(compiler->output_file, "  cmovle %s,%s\n", loc0, loc2);
+        else if (token->id == TT_GT)
+          fprintf(compiler->output_file, "  cmovg %s,%s\n", loc0, loc2);
+        else if (token->id == TT_GE)
+          fprintf(compiler->output_file, "  cmovge %s,%s\n", loc0, loc2);
+      } else {
+        if (token->id == TT_EQ)
+          fprintf(compiler->output_file, "  cmove %s,%s\n", loc0, loc2);
+        else if (token->id == TT_NE)
+          fprintf(compiler->output_file, "  cmovne %s,%s\n", loc0, loc2);
+        else if (token->id == TT_LS)
+          fprintf(compiler->output_file, "  cmovb %s,%s\n", loc0, loc2);
+        else if (token->id == TT_LE)
+          fprintf(compiler->output_file, "  cmovbe %s,%s\n", loc0, loc2);
+        else if (token->id == TT_GT)
+          fprintf(compiler->output_file, "  cmova %s,%s\n", loc0, loc2);
+        else if (token->id == TT_GE)
+          fprintf(compiler->output_file, "  cmovae %s,%s\n", loc0, loc2);
+      }
+    }
+
+    token = peek_token(parser);
+    if (!token)
+      return result;
+  }
+
+  if (found_cmp) {
+    type_free(lhs);
+    return result;
+  }
+
+  return lhs;
+}
+
 static Type *compile_expr(Parser *parser, Compiler *compiler, Dest dest) {
   bool was_return = dest == DestReturn;
 
   if (was_return)
     dest = DestTemp0;
 
-  Type *type = compile_add_expr(parser, compiler, dest);
+  Type *type = compile_cmp_expr(parser, compiler, dest, false);
 
   if (was_return) {
     char *loc0 = get_dest_loc(dest, type);
