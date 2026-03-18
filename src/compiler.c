@@ -288,7 +288,7 @@ static Type *compile_proc_call(Parser *parser, Compiler *compiler, Token *name) 
       printf("        "STR_FMT"(", STR_ARG(proc->name));
       for (u32 i = 0; i < proc->params.len; ++i) {
         if (i > 0)
-          fprintf(stderr, ", ");
+          fprintf(stdout, ", ");
         type_print(stdout, proc->params.items[i].type);
       }
       printf(")\n");
@@ -862,9 +862,11 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
         type_free(type);
         type_free(stack_type);
       } else if (next->id == TT_OPAREN) {
-        type_free(compile_proc_call(parser, compiler, token));
+        Type *type = compile_proc_call(parser, compiler, token);
         if (parser->has_error)
           return;
+
+        type_free(type);
       } else if (next->id == TT_CASSIGN) {
         Var *var = get_var(parser, compiler, token);
         if (parser->has_error)
@@ -1121,7 +1123,7 @@ bool compile(Str code, Str file_path, FILE *output_file) {
   fprintf(output_file, "_start:\n");
   fprintf(output_file, "  mov rbx,qword[rsp]\n");
   fprintf(output_file, "  push rbx\n");
-  fprintf(output_file, "  lea rbx,qword[rsp+8]\n");
+  fprintf(output_file, "  lea rbx,qword[rsp+16]\n");
   fprintf(output_file, "  push rbx\n");
   fprintf(output_file, "  call $main\n");
   fprintf(output_file, "  mov rdi,rax\n");
@@ -1160,8 +1162,8 @@ bool compile(Str code, Str file_path, FILE *output_file) {
 
       u32 params_stack_size = 0;
 
-      for (u32 i = 0; i < new_proc.params.len; ++i) {
-        Param *param = new_proc.params.items + i;
+      for (u32 i = new_proc.params.len; i > 0; --i) {
+        Param *param = new_proc.params.items + i - 1;
 
         Var new_var = {
           param->name,
@@ -1266,6 +1268,7 @@ bool compile(Str code, Str file_path, FILE *output_file) {
   for (u32 i = 0; i < compiler.strs.len; ++i) {
     Str *str = compiler.strs.items + i;
     bool is_escaped = false;
+    u32 chars_emitted = 0;
 
     fprintf(output_file, "str@%u: db ", i);
     for (u32 j = 1; j + 1 < str->len; ++j) {
@@ -1284,9 +1287,10 @@ bool compile(Str code, Str file_path, FILE *output_file) {
         continue;
       }
 
-      if (j > 1)
+      if (chars_emitted > 0)
         fprintf(output_file, ",");
       fprintf(output_file, "%u", ch);
+      ++chars_emitted;
     }
     fprintf(output_file, ",0\n");
   }
