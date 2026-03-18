@@ -25,6 +25,7 @@ typedef struct {
   Type *type;
   u32   offset;
   bool  is_param;
+  bool  is_global;
 } Var;
 
 typedef Da(Var) Vars;
@@ -57,6 +58,7 @@ typedef Da(Type *) Types;
 
 typedef struct {
   Vars           vars;
+  Vars           global_vars;
   Strs           strs;
   Procs          procs;
   NamedTypes     named_types;
@@ -301,6 +303,10 @@ static Var *get_var(Parser *parser, Compiler *compiler, Token *name) {
     if (str_eq(name->lexeme, compiler->vars.items[i - 1].name))
       return compiler->vars.items + i - 1;
 
+  for (u32 i = compiler->global_vars.len; i > 0; --i)
+    if (str_eq(name->lexeme, compiler->global_vars.items[i - 1].name))
+      return compiler->global_vars.items + i - 1;
+
   parser->has_error = true;
   PERROR(STR_FMT":%u:%u: ", "Undeclared variable `"STR_FMT"`\n",
          STR_ARG(parser->file_path),
@@ -312,6 +318,8 @@ static Var *get_var(Parser *parser, Compiler *compiler, Token *name) {
 static void print_var_loc(FILE *output_file, Var *var) {
   if (var->is_param)
     fprintf(output_file, "[rbp+%u]", var->offset + STACK_FRAME_BEGIN_SIZE);
+  else if (var->is_global)
+    fprintf(output_file, "[$"STR_FMT"]", STR_ARG(var->name));
   else
     fprintf(output_file, "[rbp-%u]", var->offset + CALLEE_PRESERVED_REGS_SIZE);
 }
@@ -330,7 +338,7 @@ static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest
       if (parser->has_error)
         return NULL;
 
-      Type *ptr_type = type_new(TypeKindPtr, type_clone(var->type));
+      Type *ptr_type = type_new(TypeKindPtr, type_clone(var->type));;
 
       char *loc = get_dest_loc(dest, ptr_type);
       fprintf(compiler->output_file, "  lea %s,", loc);
@@ -781,6 +789,7 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
         type,
         compiler->stack_size,
         false,
+        false,
       };
       DA_APPEND(compiler->vars, new_var);
     } else if (token->id == TT_RET) {
@@ -818,6 +827,15 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
           if (str_eq(token->lexeme, compiler->vars.items[i - 1].name)) {
             var = compiler->vars.items + i - 1;
             break;
+          }
+        }
+
+        if (!var) {
+          for (u32 i = compiler->global_vars.len; i > 0; --i) {
+            if (str_eq(token->lexeme, compiler->global_vars.items[i - 1].name)) {
+              var = compiler->global_vars.items + i - 1;
+              break;
+            }
           }
         }
 
@@ -1034,6 +1052,9 @@ static void cleanup(Parser *parser, Compiler *compiler) {
   for (u32 i = 0; i < parser->tokens.len; ++i)
     free(parser->tokens.items[i].lexeme.ptr);
 
+  for (u32 i = 0; i < compiler->global_vars.len; ++i)
+    type_free(compiler->global_vars.items[i].type);
+
   for (u32 i = 0; i < compiler->procs.len; ++i) {
     Proc *proc = compiler->procs.items + i;
 
@@ -1109,7 +1130,8 @@ bool compile(Str code, Str file_path, FILE *output_file) {
 
   Token *token = NULL;
   while ((token = peek_token(&parser))) {
-    expect_token(&parser, "procedure", MASK(TT_PROC) | MASK(TT_EXTERN));
+    expect_token(&parser, "`proc`, `extern` or `let`",
+                 MASK(TT_PROC) | MASK(TT_EXTERN) | MASK(TT_LET));
     if (parser.has_error) {
       cleanup(&parser, &compiler);
       return false;
@@ -1146,6 +1168,7 @@ bool compile(Str code, Str file_path, FILE *output_file) {
           type_clone(param->type),
           params_stack_size,
           true,
+          false,
         };
         DA_APPEND(compiler.vars, new_var);
 
@@ -1194,6 +1217,46 @@ bool compile(Str code, Str file_path, FILE *output_file) {
       DA_APPEND(compiler.procs, new_proc);
 
       fprintf(output_file, "extern $"STR_FMT"\n", STR_ARG(new_proc.name));
+    } else if (token->id == TT_LET) {
+      Token *name = expect_token(&parser, "identifier", MASK(TT_IDENT));
+      if (parser.has_error) {
+        cleanup(&parser, &compiler);
+        return false;
+      }
+
+      expect_token(&parser, "`:`", MASK(TT_COLON));
+      if (parser.has_error) {
+        cleanup(&parser, &compiler);
+        return false;
+      }
+
+      Type *type = compile_type(&parser, &compiler);
+      if (parser.has_error) {
+        cleanup(&parser, &compiler);
+        return false;
+      }
+
+      for (u32 i = 0; i < compiler.global_vars.len; ++i) {
+        if (str_eq(compiler.global_vars.items[i].name, name->lexeme)) {
+          parser.has_error = true;
+          PERROR(STR_FMT":%u:%u: ",
+                 "Global variable `"STR_FMT"` redefined\n",
+                 STR_ARG(parser.file_path),
+                 token->row + 1, token->col + 1,
+                 STR_ARG(name->lexeme));
+          cleanup(&parser, &compiler);
+          return false;
+        }
+      }
+
+      Var new_var = {
+        name->lexeme,
+        type,
+        0,
+        false,
+        true,
+      };
+      DA_APPEND(compiler.global_vars, new_var);
     }
   }
 
@@ -1226,6 +1289,17 @@ bool compile(Str code, Str file_path, FILE *output_file) {
       fprintf(output_file, "%u", ch);
     }
     fprintf(output_file, ",0\n");
+  }
+
+  if (compiler.global_vars.len > 0)
+    fprintf(output_file, "section '.bss'\n");
+
+  for (u32 i = 0; i < compiler.global_vars.len; ++i) {
+    Var *var = compiler.global_vars.items + i;
+
+    fprintf(output_file, "$"STR_FMT": resb %u\n",
+            STR_ARG(var->name),
+            type_get_size(var->type));
   }
 
   cleanup(&parser, &compiler);
