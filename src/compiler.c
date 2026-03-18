@@ -6,6 +6,7 @@
 #include "compiler.h"
 #include "lexer.h"
 #include "type.h"
+#include "io.h"
 
 #define MASK(id) (1lu << (id))
 
@@ -16,7 +17,6 @@ typedef struct {
   Str    code;
   u16    pos;
   Tokens tokens;
-  Str    file_path;
   bool   has_error;
 } Parser;
 
@@ -100,7 +100,7 @@ static Token *expect_token(Parser *parser, char *expected, u64 id_mask) {
   parser->has_error = true;
 
   PERROR(STR_FMT":%u:%u: ", "Expected %s, got `"STR_FMT"`\n",
-         STR_ARG(parser->file_path),
+         STR_ARG(token->file_path),
          token->row + 1, token->col + 1,
          expected, STR_ARG(token->lexeme));
 
@@ -190,7 +190,7 @@ static Type *compile_type(Parser *parser, Compiler *compiler) {
 
   parser->has_error = true;
   PERROR(STR_FMT":%u:%u: ", "Undeclared type `"STR_FMT"`\n",
-         STR_ARG(parser->file_path),
+         STR_ARG(token->file_path),
          token->row + 1, token->col + 1,
          STR_ARG(token->lexeme));
 
@@ -270,7 +270,7 @@ static Type *compile_proc_call(Parser *parser, Compiler *compiler, Token *name) 
 
   parser->has_error = true;
   PERROR(STR_FMT":%u:%u: ", "Undeclared procedure `"STR_FMT"(",
-         STR_ARG(parser->file_path),
+         STR_ARG(name->file_path),
          name->row + 1, name->col + 1,
          STR_ARG(name->lexeme));
   for (u32 i = 0; i < compiler->param_types.len; ++i) {
@@ -309,7 +309,7 @@ static Var *get_var(Parser *parser, Compiler *compiler, Token *name) {
 
   parser->has_error = true;
   PERROR(STR_FMT":%u:%u: ", "Undeclared variable `"STR_FMT"`\n",
-         STR_ARG(parser->file_path),
+         STR_ARG(name->file_path),
          name->row + 1, name->col + 1,
          STR_ARG(name->lexeme));
   return NULL;
@@ -355,7 +355,7 @@ static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest
         parser->has_error = true;
         PERROR(STR_FMT":%u:%u: ",
                "Attempt to dereference a non-pointer value\n",
-               STR_ARG(parser->file_path),
+               STR_ARG(token->file_path),
                token->row + 1, token->col + 1);
         return NULL;
       }
@@ -450,7 +450,7 @@ static Type *compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest)
     if (!types_can_cast(type, new_type)) {
       parser->has_error = true;
       PERROR(STR_FMT":%u:%u: ", "Cannot cast ",
-             STR_ARG(parser->file_path),
+             STR_ARG(token->file_path),
              token->row + 1, token->col + 1);
       type_print(stderr, type);
       fprintf(stderr, " -> ");
@@ -499,7 +499,7 @@ static Type *compile_mul_expr(Parser *parser, Compiler *compiler, Dest dest) {
     if (!types_can_add(lhs, rhs)) {
       parser->has_error = true;
       PERROR(STR_FMT":%u:%u: ", "Cannot do ",
-             STR_ARG(parser->file_path),
+             STR_ARG(token->file_path),
              token->row + 1, token->col + 1);
       type_print(stderr, lhs);
       if (token->id == TT_STAR)
@@ -575,7 +575,7 @@ static Type *compile_add_expr(Parser *parser, Compiler *compiler, Dest dest) {
     if (!types_can_add(lhs, rhs)) {
       parser->has_error = true;
       PERROR(STR_FMT":%u:%u: ", "Cannot do ",
-             STR_ARG(parser->file_path),
+             STR_ARG(token->file_path),
              token->row + 1, token->col + 1);
       type_print(stderr, lhs);
       if (token->id == TT_PLUS)
@@ -628,10 +628,10 @@ static Type *compile_cmp_expr(Parser *parser, Compiler *compiler, Dest dest, u32
     if (parser->has_error)
       return NULL;
 
-    if (!types_can_add(lhs, rhs)) {
+    if (!type_eq(lhs, rhs)) {
       parser->has_error = true;
       PERROR(STR_FMT":%u:%u: ", "Cannot do ",
-             STR_ARG(parser->file_path),
+             STR_ARG(token->file_path),
              token->row + 1, token->col + 1);
       type_print(stderr, lhs);
       if (token->id == TT_EQ)
@@ -805,7 +805,7 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
       if (!type_eq(type, compiler->current_proc_return_type)) {
         parser->has_error = true;
         PERROR(STR_FMT":%u:%u: ", "Unexpected return type: ",
-               STR_ARG(parser->file_path),
+               STR_ARG(token->file_path),
                token->row + 1, token->col + 1);
         type_print(stderr, type);
         fprintf(stderr, "\n");
@@ -844,7 +844,7 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
         if (!var) {
           parser->has_error = true;
           PERROR(STR_FMT":%u:%u: ", "Undeclared variable `"STR_FMT"`\n",
-                 STR_ARG(parser->file_path),
+                 STR_ARG(token->file_path),
                  token->row + 1, token->col + 1,
                  STR_ARG(token->lexeme));
           return;
@@ -878,7 +878,7 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
           parser->has_error = true;
           PERROR(STR_FMT":%u:%u: ",
                  "Attempt to deref-assign to a non-pointer variable `"STR_FMT"`\n",
-                 STR_ARG(parser->file_path),
+                 STR_ARG(token->file_path),
                  token->row + 1, token->col + 1,
                  STR_ARG(token->lexeme));
           return;
@@ -1078,7 +1078,7 @@ static Proc compile_proc_decl(Parser *parser, Compiler *compiler) {
   return proc;
 }
 
-static void cleanup(Parser *parser, Compiler *compiler) {
+static void cleanup(Parser *parser, Compiler *compiler, Strs *included_files) {
   for (u32 i = 0; i < parser->tokens.len; ++i)
     free(parser->tokens.items[i].lexeme.ptr);
 
@@ -1101,6 +1101,9 @@ static void cleanup(Parser *parser, Compiler *compiler) {
   for (u32 i = 0; i < compiler->param_types.len; ++i)
     type_free(compiler->param_types.items[i]);
 
+  for (u32 i = 0; i < included_files->len; ++i)
+    free(included_files->items[i].ptr);
+
   if (parser->tokens.items)
     free(parser->tokens.items);
   if (compiler->vars.items)
@@ -1115,12 +1118,26 @@ static void cleanup(Parser *parser, Compiler *compiler) {
     free(compiler->param_types.items);
   if (compiler->temp_sb.buffer)
     free(compiler->temp_sb.buffer);
+  if (included_files->items)
+    free(included_files->items);
+}
+
+Str get_file_dir(Str path) {
+  while (path.len > 0 && path.ptr[path.len - 1] != '/')
+    --path.len;
+
+  return path;
 }
 
 bool compile(Str code, Str file_path, FILE *output_file) {
   StringBuilder temp_sb = {0};
-  Tokens tokens = lex(code, file_path, &temp_sb);
-  Parser parser = { code, 0, tokens, file_path, false };
+  Strs included_files = {0};
+
+  Parser parser = { code, 0, {}, false };
+  bool success = lex(&parser.tokens, code, file_path, &temp_sb);
+  if (!success)
+    return false;
+
   Compiler compiler = {0};
   compiler.output_file = output_file;
   compiler.temp_sb = temp_sb;
@@ -1160,17 +1177,18 @@ bool compile(Str code, Str file_path, FILE *output_file) {
 
   Token *token = NULL;
   while ((token = peek_token(&parser))) {
-    expect_token(&parser, "`proc`, `extern` or `let`",
-                 MASK(TT_PROC) | MASK(TT_EXTERN) | MASK(TT_LET));
+    expect_token(&parser, "`proc`, `extern`, `let` or `include`",
+                 MASK(TT_PROC) | MASK(TT_EXTERN) |
+                 MASK(TT_LET) | MASK(TT_INCLUDE));
     if (parser.has_error) {
-      cleanup(&parser, &compiler);
+      cleanup(&parser, &compiler, &included_files);
       return false;
     }
 
     if (token->id == TT_PROC) {
       Proc new_proc = compile_proc_decl(&parser, &compiler);
       if (parser.has_error) {
-        cleanup(&parser, &compiler);
+        cleanup(&parser, &compiler, &included_files);
         return false;
       }
 
@@ -1215,7 +1233,7 @@ bool compile(Str code, Str file_path, FILE *output_file) {
         fprintf(output_file, "  add rsp,%u\n", compiler.stack_size);
 
       if (parser.has_error) {
-        cleanup(&parser, &compiler);
+        cleanup(&parser, &compiler, &included_files);
         return false;
       }
 
@@ -1228,19 +1246,19 @@ bool compile(Str code, Str file_path, FILE *output_file) {
 
       expect_token(&parser, "`end`", MASK(TT_END));
       if (parser.has_error) {
-        cleanup(&parser, &compiler);
+        cleanup(&parser, &compiler, &included_files);
         return false;
       }
     } else if (token->id == TT_EXTERN) {
       expect_token(&parser, "`proc`", MASK(TT_PROC));
       if (parser.has_error) {
-        cleanup(&parser, &compiler);
+        cleanup(&parser, &compiler, &included_files);
         return false;
       }
 
       Proc new_proc = compile_proc_decl(&parser, &compiler);
       if (parser.has_error) {
-        cleanup(&parser, &compiler);
+        cleanup(&parser, &compiler, &included_files);
         return false;
       }
 
@@ -1250,19 +1268,19 @@ bool compile(Str code, Str file_path, FILE *output_file) {
     } else if (token->id == TT_LET) {
       Token *name = expect_token(&parser, "identifier", MASK(TT_IDENT));
       if (parser.has_error) {
-        cleanup(&parser, &compiler);
+        cleanup(&parser, &compiler, &included_files);
         return false;
       }
 
       expect_token(&parser, "`:`", MASK(TT_COLON));
       if (parser.has_error) {
-        cleanup(&parser, &compiler);
+        cleanup(&parser, &compiler, &included_files);
         return false;
       }
 
       Type *type = compile_type(&parser, &compiler);
       if (parser.has_error) {
-        cleanup(&parser, &compiler);
+        cleanup(&parser, &compiler, &included_files);
         return false;
       }
 
@@ -1271,10 +1289,10 @@ bool compile(Str code, Str file_path, FILE *output_file) {
           parser.has_error = true;
           PERROR(STR_FMT":%u:%u: ",
                  "Global variable `"STR_FMT"` redefined\n",
-                 STR_ARG(parser.file_path),
+                 STR_ARG(token->file_path),
                  token->row + 1, token->col + 1,
                  STR_ARG(name->lexeme));
-          cleanup(&parser, &compiler);
+          cleanup(&parser, &compiler, &included_files);
           return false;
         }
       }
@@ -1287,6 +1305,69 @@ bool compile(Str code, Str file_path, FILE *output_file) {
         true,
       };
       DA_APPEND(compiler.global_vars, new_var);
+    } else if (token->id == TT_INCLUDE) {
+      Token *path = expect_token(&parser, "string", MASK(TT_STR));
+      if (parser.has_error) {
+        cleanup(&parser, &compiler, &included_files);
+        return false;
+      }
+
+      Str current_dir = get_file_dir(token->file_path);
+      Str path_str;
+      path_str.len = current_dir.len + path->lexeme.len - 2;
+      path_str.ptr = malloc(path_str.len);
+      memcpy(path_str.ptr, current_dir.ptr, current_dir.len);
+      memcpy(path_str.ptr + current_dir.len,
+             path->lexeme.ptr + 1,
+             path->lexeme.len - 2);
+
+      bool already_included = false;
+
+      for (u32 i = 0; i < included_files.len; ++i) {
+        if (str_eq(included_files.items[i], path_str)) {
+          already_included = true;
+          break;
+        }
+      }
+
+      if (already_included) {
+        free(path_str.ptr);
+        continue;
+      }
+
+      Str temp_code = read_file_str(path_str);
+      if (temp_code.ptr == NULL) {
+        ERROR("Could not open "STR_FMT"\n", STR_ARG(path_str));
+        cleanup(&parser, &compiler, &included_files);
+        return false;
+      }
+
+      Tokens temp_tokens = {0};
+      bool success = lex(&temp_tokens, temp_code, path_str, &temp_sb);
+      if (!success) {
+        cleanup(&parser, &compiler, &included_files);
+        return false;
+      }
+
+      if (parser.tokens.cap < parser.tokens.len + temp_tokens.len) {
+        parser.tokens.cap = parser.tokens.len + temp_tokens.len;
+        parser.tokens.items =
+          realloc(parser.tokens.items, parser.tokens.cap * sizeof(Token));
+      }
+      memmove(parser.tokens.items + parser.pos + temp_tokens.len,
+              parser.tokens.items + parser.pos,
+              (parser.tokens.len - parser.pos) * sizeof(Token));
+      memcpy(parser.tokens.items + parser.pos,
+             temp_tokens.items,
+             temp_tokens.len * sizeof(Token));
+
+      parser.tokens.len += temp_tokens.len;
+
+      DA_APPEND(included_files, path_str);
+
+      free(temp_code.ptr);
+      if (temp_tokens.items)
+        free(temp_tokens.items);
     }
   }
 
@@ -1322,7 +1403,9 @@ bool compile(Str code, Str file_path, FILE *output_file) {
       fprintf(output_file, "%u", ch);
       ++chars_emitted;
     }
-    fprintf(output_file, ",0\n");
+    if (str->len > 2)
+      fprintf(output_file, ",");
+    fprintf(output_file, "0\n");
   }
 
   if (compiler.global_vars.len > 0)
@@ -1336,7 +1419,7 @@ bool compile(Str code, Str file_path, FILE *output_file) {
             type_get_size(var->type));
   }
 
-  cleanup(&parser, &compiler);
+  cleanup(&parser, &compiler, &included_files);
 
   return true;
 }

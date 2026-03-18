@@ -7,8 +7,7 @@
 #include "grammar.h"
 #include "lexer.h"
 
-Tokens lex(Str code, Str file_path, StringBuilder *temp_sb) {
-  Tokens tokens = {0};
+bool lex(Tokens *tokens, Str code, Str file_path, StringBuilder *temp_sb) {
   TransitionTable *table = get_transition_table();
   u16 current_row = 0;
   u16 current_col = 0;
@@ -51,7 +50,13 @@ Tokens lex(Str code, Str file_path, StringBuilder *temp_sb) {
 
       PERROR(STR_FMT":%u:%u: ", "Unexpected `%lc`\n", STR_ARG(file_path),
              current_row + 1, current_col + 1, (wint_t) _wchar);
-      exit(1);
+
+      for (u32 i = 0; i < tokens->len; ++i)
+        free(tokens->items[i].lexeme.ptr);
+      if (tokens->items)
+        free(tokens->items);
+
+      return false;
     }
 
     if (id == TT_STR) {
@@ -81,7 +86,13 @@ Tokens lex(Str code, Str file_path, StringBuilder *temp_sb) {
       if (code.len == 0) {
         PERROR(STR_FMT":%u:%u: ", "String literal was not closed\n",
                STR_ARG(file_path), row + 1, col + 1);
-        exit(1);
+
+        for (u32 i = 0; i < tokens->len; ++i)
+          free(tokens->items[i].lexeme.ptr);
+        if (tokens->items)
+          free(tokens->items);
+
+        return false;
       }
 
       sb_push_char(temp_sb, code.ptr[0]);
@@ -102,8 +113,8 @@ Tokens lex(Str code, Str file_path, StringBuilder *temp_sb) {
     lexeme.ptr = new_ptr;
 
     Token token = (Token) { id, lexeme, file_path, row, col };
-    DA_APPEND(tokens, token);
+    DA_APPEND(*tokens, token);
   }
 
-  return tokens;
+  return true;
 }

@@ -21,6 +21,18 @@ Str read_file(char *path) {
   return content;
 }
 
+Str read_file_str(Str path) {
+  char *path_cstr = malloc(path.len + 1);
+  memcpy(path_cstr, path.ptr, path.len);
+  path_cstr[path.len] = '\0';
+
+  Str content = read_file(path_cstr);
+
+  free(path_cstr);
+
+  return content;
+}
+
 bool write_file(char *path, Str content) {
   FILE *file = fopen(path, "w");
   if (!file) {

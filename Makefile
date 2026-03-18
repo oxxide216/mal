@@ -14,7 +14,7 @@ LIBS_OBJ = $(patsubst %.c,$(BUILD_DIR)/%.o,$(LIBS_SRC))
 mal: $(OBJ) $(LIBS_OBJ)
 > $(CC) -o mal $(OBJ) $(LIBS_OBJ) $(LDFLAGS)
 
-src/grammar.h: libs/lexgen/lexgen
+src/grammar.h: libs/lexgen/lexgen grammar.lg
 > libs/lexgen/lexgen src/grammar.h grammar.lg
 
 libs/lexgen/lexgen:

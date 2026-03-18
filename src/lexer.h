@@ -13,6 +13,6 @@ typedef struct {
 
 typedef Da(Token) Tokens;
 
-Tokens lex(Str code, Str file_path, StringBuilder *temp_sb);
+bool lex(Tokens *tokens, Str code, Str file_path, StringBuilder *temp_sb);
 
 #endif // LEXER_H

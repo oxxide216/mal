@@ -13,6 +13,7 @@ if=if
 elif=elif
 else=else
 while=while
+include=include
 
 assign==
 oparen=\(
