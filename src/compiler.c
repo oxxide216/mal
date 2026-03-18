@@ -1274,12 +1274,14 @@ bool compile(Str code, Str file_path, FILE *output_file) {
     for (u32 j = 1; j + 1 < str->len; ++j) {
       char ch = str->ptr[j];
       if (is_escaped) {
+        is_escaped = false;
         switch (ch) {
         case 'n': ch = '\n'; break;
         case 'r': ch = '\r'; break;
         case 't': ch = '\t'; break;
         case 'v': ch = '\v'; break;
         case 'b': ch = '\b'; break;
+        case 'e': ch = '\e'; break;
         case '0': ch = '\0'; break;
         }
       } else if (ch == '\\') {
