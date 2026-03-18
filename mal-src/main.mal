@@ -1,0 +1,44 @@
+proc strlen(str: &s8) -> s64
+  let len = 0
+  while *(str + len) != 0 as s8
+    len = len + 1
+  end
+
+  retval len
+end
+
+proc write(fd: s64, str: &s8, len: s64)
+  "mov rax,1"
+  "mov rdi,[rbp+32]"
+  "mov rsi,[rbp+24]"
+  "mov rdx,[rbp+16]"
+  "syscall"
+end
+
+proc print(str: &s8)
+  let len = strlen(str)
+  write(1, str, len)
+end
+
+proc println(str: &s8)
+  print(str)
+  write(1, "\n", 1)
+end
+
+proc print_usage(program_name: &s8)
+  print(program_name)
+  println(" [OUTPUT FILE] [INPUT FILE]")
+end
+
+proc error(str: &s8)
+  print("\e[31;1m[ERROR]\e[0m: ")
+  println(str)
+end
+
+proc main(argc: s64, argv: &&s8) -> s64
+  if argc < 3
+    print_usage(*argv)
+    error("no input file")
+    retval 1
+  end
+end
