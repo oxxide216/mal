@@ -1,62 +1,20 @@
-struct svec2
-  x: s32
-  y: s32
-end
+extern proc exit(code: s32) -> s32
 
-proc svec2s(x: s32) -> svec2
-  let result = svec2 { x, x }
-  retval result
-end
+proc main() -> s8
+  let x = 5
+  let y = x
+  y = (2 + y) * 2
+  let str = "Hello, World!\n"
+  #exit(0)
+  let r = &y
+  r := *r + 1
+  "; Hiiii! :3"
 
-proc svec2_add(a: svec2, b: svec2) -> svec2
-  let c = a
-  retval c
-end
-
-proc main(argc: u32, argv: &&u8) -> s32
-  let str0 = "Hello, World!\n"
-  let str1 = "Foo, Bar!\n"
-  let str2 = "Bazz!\n"
-
-  if 0 != 0
-    print(str0, 14)
+  if y < 16
+    retval 1 as s8
   elif 1 == 1
-    print(str2, 6)
+    retval 2 as s8
   else
-    print(str1, 10)
+    retval 0 as s8
   end
-
-  let i = 0
-  while i < 10
-    print("In a loop!\n", 11)
-    i = i + 1
-  end
-
-  let a = -5
-  let r = &a
-  *r = 2
-  let b = *r
-  let c = a + b
-
-  let vec = svec2s(2)
-  vec.y = 3
-  let result = vec.x + vec.y
-
-  retval result
-end
-
-proc var() -> s32
-  let c = 1
-  let a = 2
-  let b = a
-  let d = c
-  retval b
-end
-
-proc print(bytes: &u8, size: s32)
-  "mov rdx,rsi"
-  "mov rsi,rdi"
-  "mov rdi,1"
-  "mov rax,1"
-  "syscall"
 end

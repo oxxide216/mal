@@ -28,7 +28,7 @@ bool type_eq(Type *a, Type *b) {
 
   return (!a->target && !b->target) ||
          (a->target && b->target &&
-           type_eq(a->target, b->target));
+          type_eq(a->target, b->target));
 }
 
 Type *type_clone(Type *type) {
@@ -64,8 +64,8 @@ bool type_is_signed(Type *type) {
 }
 
 bool types_can_add(Type *a, Type *b) {
-  return a->kind >= TypeKindS8 && a->kind <= TypeKindPtr &&
-         a->kind == b->kind;
+  return (a->kind >= TypeKindS8 && a->kind <= TypeKindS64 && a->kind == b->kind) ||
+         (a->kind == TypeKindPtr && b->kind >= TypeKindS8 && b->kind <= TypeKindS64);
 }
 
 bool types_can_mul(Type *a, Type *b) {

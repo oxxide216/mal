@@ -9,6 +9,10 @@ ret=ret
 retval=retval
 extern=extern
 as=as
+if=if
+elif=elif
+else=else
+while=while
 
 assign==
 oparen=\(

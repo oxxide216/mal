@@ -9,7 +9,8 @@
 
 #define MASK(id) (1lu << (id))
 
-#define CALLE_PRESERVED_REGS_SIZE 24
+#define STACK_FRAME_BEGIN_SIZE     16
+#define CALLEE_PRESERVED_REGS_SIZE 24
 
 typedef struct {
   Str    code;
@@ -23,6 +24,7 @@ typedef struct {
   Str   name;
   Type *type;
   u32   offset;
+  bool  is_param;
 } Var;
 
 typedef Da(Var) Vars;
@@ -60,6 +62,7 @@ typedef struct {
   NamedTypes     named_types;
   Types          param_types;
   u32            stack_size;
+  u32            labels_count;
   FILE          *output_file;
   Type          *current_proc_return_type;
   StringBuilder  temp_sb;
@@ -306,6 +309,13 @@ static Var *get_var(Parser *parser, Compiler *compiler, Token *name) {
   return NULL;
 }
 
+static void print_var_loc(FILE *output_file, Var *var) {
+  if (var->is_param)
+    fprintf(output_file, "[rbp+%u]", var->offset + STACK_FRAME_BEGIN_SIZE);
+  else
+    fprintf(output_file, "[rbp-%u]", var->offset + CALLEE_PRESERVED_REGS_SIZE);
+}
+
 static Type *compile_add_expr(Parser *parser, Compiler *compiler, Dest dest);
 
 static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest) {
@@ -323,37 +333,30 @@ static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest
       Type *ptr_type = type_new(TypeKindPtr, type_clone(var->type));
 
       char *loc = get_dest_loc(dest, ptr_type);
-      fprintf(compiler->output_file, "  lea %s,[rbp-%u]\n",
-              loc, var->offset + CALLE_PRESERVED_REGS_SIZE);
+      fprintf(compiler->output_file, "  lea %s,", loc);
+      print_var_loc(compiler->output_file, var);
+      fprintf(compiler->output_file, "\n");
 
       return ptr_type;
     } else if (token->id == TT_STAR) {
-      token = expect_token(parser, "identifier", MASK(TT_IDENT));
-
-      Var *var = get_var(parser, compiler, token);
+      Type *type = _compile_primary_expr(parser, compiler, dest);
       if (parser->has_error)
         return NULL;
 
-      if (var->type->kind != TypeKindPtr) {
+      if (type->kind != TypeKindPtr) {
         parser->has_error = true;
         PERROR(STR_FMT":%u:%u: ",
-               "Attempt to dereference a non-pointer variable `"STR_FMT"`\n",
+               "Attempt to dereference a non-pointer value\n",
                STR_ARG(parser->file_path),
-               token->row + 1, token->col + 1,
-               STR_ARG(token->lexeme));
+               token->row + 1, token->col + 1);
         return NULL;
       }
 
-      fprintf(compiler->output_file, "  mov rax,[rbp-%u]\n",
-              var->offset + CALLE_PRESERVED_REGS_SIZE);
-      fprintf(compiler->output_file, "  mov rax,[rax]\n");
+      char *loc0 = get_dest_loc(dest, type);
+      char *loc1 = get_dest_loc(dest, type->target);
+      fprintf(compiler->output_file, "  mov %s,[%s]\n", loc1, loc0);
 
-      if (dest != DestReturn) {
-        char *loc = get_dest_loc(dest, var->type);
-        fprintf(compiler->output_file, "  mov %s,rax\n", loc);
-      }
-
-      return type_clone(var->type->target);
+      return type_clone(type->target);
     }
 
     token = peek_token(parser);
@@ -384,21 +387,37 @@ static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest
   } else if (token->id == TT_IDENT) {
     Token *next = peek_token(parser);
     if (next && next->id == TT_OPAREN) {
-      return compile_proc_call(parser, compiler, token);
+      next_token(parser);
+
+      Type *type = compile_proc_call(parser, compiler, token);
+
+      char *loc0 = get_dest_loc(DestReturn, type);
+      char *loc1 = get_dest_loc(dest, type);
+      if (dest != DestReturn)
+        fprintf(compiler->output_file, "  mov %s,%s\n", loc1, loc0);
+
+      return type;
     } else {
       Var *var = get_var(parser, compiler, token);
       if (parser->has_error)
         return NULL;
 
       char *loc = get_dest_loc(dest, var->type);
-      fprintf(compiler->output_file, "  mov %s,[rbp-%u]\n",
-              loc, var->offset + CALLE_PRESERVED_REGS_SIZE);
+      fprintf(compiler->output_file, "  mov %s,", loc);
+      print_var_loc(compiler->output_file, var);
+      fprintf(compiler->output_file, "\n");
 
       return type_clone(var->type);
     }
   } else if (token->id == TT_OPAREN) {
     Type *type = compile_add_expr(parser, compiler, dest);
+    if (parser->has_error)
+      return NULL;
+
     expect_token(parser, "`)`", MASK(TT_CPAREN));
+    if (parser->has_error)
+      return NULL;
+
     return type;
   }
 
@@ -407,12 +426,16 @@ static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest
 
 static Type *compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest) {
   Type *type = _compile_primary_expr(parser, compiler, dest);
+  if (parser->has_error)
+    return NULL;
 
   Token *token = peek_token(parser);
   while (token && token->id == TT_AS) {
     next_token(parser);
 
     Type *new_type = compile_type(parser, compiler);
+    if (parser->has_error)
+      return NULL;
 
     if (!types_can_cast(type, new_type)) {
       parser->has_error = true;
@@ -573,7 +596,7 @@ static Type *compile_add_expr(Parser *parser, Compiler *compiler, Dest dest) {
 }
 
 // ==, !=, <, >, <=, >=
-static Type *compile_cmp_expr(Parser *parser, Compiler *compiler, Dest dest, Str *label) {
+static Type *compile_cmp_expr(Parser *parser, Compiler *compiler, Dest dest, u32 label_index) {
   Type *lhs = compile_add_expr(parser, compiler, dest);
   if (parser->has_error)
     return NULL;
@@ -626,33 +649,33 @@ static Type *compile_cmp_expr(Parser *parser, Compiler *compiler, Dest dest, Str
 
     fprintf(compiler->output_file, "  cmp %s,%s\n", loc0, loc1);
 
-    if (label) {
+    if (label_index != (u32) -1) {
       if (type_is_signed(lhs)) {
         if (token->id == TT_EQ)
-          fprintf(compiler->output_file, "  jne "STR_FMT"\n", STR_ARG(*label));
+          fprintf(compiler->output_file, "  jne .l%u\n", label_index);
         else if (token->id == TT_NE)
-          fprintf(compiler->output_file, "  je "STR_FMT"\n", STR_ARG(*label));
+          fprintf(compiler->output_file, "  je .l%u\n", label_index);
         else if (token->id == TT_LS)
-          fprintf(compiler->output_file, "  jge "STR_FMT"\n", STR_ARG(*label));
+          fprintf(compiler->output_file, "  jge .l%u\n", label_index);
         else if (token->id == TT_LE)
-          fprintf(compiler->output_file, "  jg "STR_FMT"\n", STR_ARG(*label));
+          fprintf(compiler->output_file, "  jg .l%u\n", label_index);
         else if (token->id == TT_GT)
-          fprintf(compiler->output_file, "  jle "STR_FMT"\n", STR_ARG(*label));
+          fprintf(compiler->output_file, "  jle .l%u\n", label_index);
         else if (token->id == TT_GE)
-          fprintf(compiler->output_file, "  jl "STR_FMT"\n", STR_ARG(*label));
+          fprintf(compiler->output_file, "  jl .l%u\n", label_index);
       } else {
         if (token->id == TT_EQ)
-          fprintf(compiler->output_file, "  jne "STR_FMT"\n", STR_ARG(*label));
+          fprintf(compiler->output_file, "  jne .l%u\n", label_index);
         else if (token->id == TT_NE)
-          fprintf(compiler->output_file, "  je "STR_FMT"\n", STR_ARG(*label));
+          fprintf(compiler->output_file, "  je .l%u\n", label_index);
         else if (token->id == TT_LS)
-          fprintf(compiler->output_file, "  jae "STR_FMT"\n", STR_ARG(*label));
+          fprintf(compiler->output_file, "  jae .l%u\n", label_index);
         else if (token->id == TT_LE)
-          fprintf(compiler->output_file, "  ja "STR_FMT"\n", STR_ARG(*label));
+          fprintf(compiler->output_file, "  ja .l%u\n", label_index);
         else if (token->id == TT_GT)
-          fprintf(compiler->output_file, "  jbe "STR_FMT"\n", STR_ARG(*label));
+          fprintf(compiler->output_file, "  jbe .l%u\n", label_index);
         else if (token->id == TT_GE)
-          fprintf(compiler->output_file, "  jb "STR_FMT"\n", STR_ARG(*label));
+          fprintf(compiler->output_file, "  jb .l%u\n", label_index);
       }
     } else {
       fprintf(compiler->output_file, "  mov %s,0\n", loc0);
@@ -705,7 +728,9 @@ static Type *compile_expr(Parser *parser, Compiler *compiler, Dest dest) {
   if (was_return)
     dest = DestTemp0;
 
-  Type *type = compile_cmp_expr(parser, compiler, dest, false);
+  Type *type = compile_cmp_expr(parser, compiler, dest, (u32) -1);
+  if (parser->has_error)
+    return NULL;
 
   if (was_return) {
     char *loc0 = get_dest_loc(dest, type);
@@ -718,10 +743,14 @@ static Type *compile_expr(Parser *parser, Compiler *compiler, Dest dest) {
 
 static void compile_instrs(Parser *parser, Compiler *compiler) {
   Token *token = NULL;
-  while ((token = peek_token(parser)) && token->id != TT_END) {
-    expect_token(parser, "`let`, `ret`, `retval`, identifier or string",
+  while ((token = peek_token(parser)) &&
+         token->id != TT_END &&
+         token->id != TT_ELIF &&
+         token->id != TT_ELSE) {
+    expect_token(parser, "`let`, `ret`, `retval`, `if`, `while`, identifier or string",
                  MASK(TT_LET) | MASK(TT_RET) | MASK(TT_RETVAL) |
-                 MASK(TT_IDENT) | MASK(TT_STR));
+                 MASK(TT_IF) | MASK(TT_WHILE) | MASK(TT_IDENT) |
+                 MASK(TT_STR));
     if (parser->has_error)
       return;
 
@@ -751,6 +780,7 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
         name->lexeme,
         type,
         compiler->stack_size,
+        false,
       };
       DA_APPEND(compiler->vars, new_var);
     } else if (token->id == TT_RET) {
@@ -758,6 +788,8 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
         fprintf(compiler->output_file, "  jmp .end\n");
     } else if (token->id == TT_RETVAL) {
       Type *type = compile_expr(parser, compiler, DestReturn);
+      if (parser->has_error)
+        return;
 
       if (!type_eq(type, compiler->current_proc_return_type)) {
         parser->has_error = true;
@@ -805,8 +837,9 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
         Type *stack_type = get_type_on_stack(type);
 
         char *loc = get_dest_loc(DestTemp0, stack_type);
-        fprintf(compiler->output_file, "  mov [rbp-%u],%s\n",
-                var->offset + CALLE_PRESERVED_REGS_SIZE, loc);
+        fprintf(compiler->output_file, "  mov ");
+        print_var_loc(compiler->output_file, var);
+        fprintf(compiler->output_file, ",%s\n", loc);
 
         type_free(type);
         type_free(stack_type);
@@ -839,13 +872,90 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
 
         type_free(stack_type);
 
-        fprintf(compiler->output_file, "  mov rax,[rbp-%u]\n",
-                var->offset + CALLE_PRESERVED_REGS_SIZE);
+        fprintf(compiler->output_file, "  mov rax,");
+        print_var_loc(compiler->output_file, var);
+        fprintf(compiler->output_file, "\n");
         fprintf(compiler->output_file, "  mov [rax],%s\n", loc);
       }
     } else if (token->id == TT_STR) {
       fprintf(compiler->output_file, "  "STR_FMT"\n",
               STR_ARG(STR(token->lexeme.ptr + 1, token->lexeme.len - 2)));
+    } else if (token->id == TT_IF) {
+      u32 label_index = compiler->labels_count++;
+      u32 end_label_index = (u32) -1;
+
+      compile_cmp_expr(parser, compiler, DestTemp0, label_index);
+      if (parser->has_error)
+        return;
+
+      compile_instrs(parser, compiler);
+      if (parser->has_error)
+        return;
+
+      Token *next = expect_token(parser, "`elif`, `else` or `end`",
+                                 MASK(TT_ELIF) | MASK(TT_ELSE) | MASK(TT_END));
+      if (parser->has_error)
+        return;
+
+      if (next->id != TT_END) {
+        end_label_index = compiler->labels_count++;
+        fprintf(compiler->output_file, "  jmp .l%u\n", end_label_index);
+      }
+      fprintf(compiler->output_file, ".l%u\n", label_index);
+
+      while (next->id == TT_ELIF) {
+        label_index = compiler->labels_count++;
+        compile_cmp_expr(parser, compiler, DestTemp0, label_index);
+
+        compile_instrs(parser, compiler);
+        if (parser->has_error)
+          return;
+
+        next = expect_token(parser, "`elif`, `else` or `end`",
+                            MASK(TT_ELIF) | MASK(TT_ELSE) | MASK(TT_END));
+        if (parser->has_error)
+          return;
+
+        if (next->id != TT_END) {
+          if (end_label_index == (u32) -1)
+            end_label_index = compiler->labels_count++;
+          fprintf(compiler->output_file, "  jmp .l%u\n", end_label_index);
+        }
+        fprintf(compiler->output_file, ".l%u\n", label_index);
+      }
+
+      if (next->id == TT_ELSE) {
+        compile_instrs(parser, compiler);
+        if (parser->has_error)
+          return;
+
+        if (end_label_index != (u32) -1)
+          fprintf(compiler->output_file, ".l%u\n", end_label_index);
+
+        next = expect_token(parser, "`end`", MASK(TT_END));
+        if (parser->has_error)
+          return;
+      }
+    } else if (token->id == TT_WHILE) {
+      u32 begin_label_index = compiler->labels_count++;
+      u32 end_label_index = compiler->labels_count++;
+
+      fprintf(compiler->output_file, ".l%u\n", begin_label_index);
+
+      compile_cmp_expr(parser, compiler, DestTemp0, end_label_index);
+      if (parser->has_error)
+        return;
+
+      compile_instrs(parser, compiler);
+      if (parser->has_error)
+        return;
+
+      expect_token(parser, "`end`", MASK(TT_END));
+      if (parser->has_error)
+        return;
+
+      fprintf(compiler->output_file, "  jmp .l%u\n", begin_label_index);
+      fprintf(compiler->output_file, ".l%u\n", end_label_index);
     }
   }
 }
@@ -1022,7 +1132,25 @@ bool compile(Str code, Str file_path, FILE *output_file) {
       fprintf(output_file, "  push r12\n");
       fprintf(output_file, "  push r13\n");
 
+      compiler.stack_size = 0;
+      compiler.labels_count = 0;
       compiler.current_proc_return_type = new_proc.return_type;
+
+      u32 params_stack_size = 0;
+
+      for (u32 i = 0; i < new_proc.params.len; ++i) {
+        Param *param = new_proc.params.items + i;
+
+        Var new_var = {
+          param->name,
+          type_clone(param->type),
+          params_stack_size,
+          true,
+        };
+        DA_APPEND(compiler.vars, new_var);
+
+        params_stack_size += type_get_size(param->type);
+      }
 
       compile_instrs(&parser, &compiler);
 
