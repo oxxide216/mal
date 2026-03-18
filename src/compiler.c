@@ -398,6 +398,8 @@ static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest
       next_token(parser);
 
       Type *type = compile_proc_call(parser, compiler, token);
+      if (parser->has_error)
+        return NULL;
 
       char *loc0 = get_dest_loc(DestReturn, type);
       char *loc1 = get_dest_loc(dest, type);
