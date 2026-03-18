@@ -9,9 +9,9 @@ end
 
 proc write(fd: s64, str: &s8, len: s64)
   "mov rax,1"
-  "mov rdi,[rbp+32]"
-  "mov rsi,[rbp+24]"
-  "mov rdx,[rbp+16]"
+  "mov rdi,", fd
+  "mov rsi,", str
+  "mov rdx,", len
   "syscall"
 end
 
@@ -26,6 +26,7 @@ proc println(str: &s8)
 end
 
 proc print_usage(program_name: &s8)
+  print("Usage: ")
   print(program_name)
   println(" [OUTPUT FILE] [INPUT FILE]")
 end
@@ -38,7 +39,7 @@ end
 proc main(argc: s64, argv: &&s8) -> s64
   if argc < 3
     print_usage(*argv)
-    error("no input file")
+    error("No input file")
     retval 1
   end
 end

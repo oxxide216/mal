@@ -898,8 +898,34 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
         fprintf(compiler->output_file, "  mov [rax],%s\n", loc);
       }
     } else if (token->id == TT_STR) {
-      fprintf(compiler->output_file, "  "STR_FMT"\n",
+      fprintf(compiler->output_file, "  "STR_FMT,
               STR_ARG(STR(token->lexeme.ptr + 1, token->lexeme.len - 2)));
+
+      Token *next = peek_token(parser);
+
+      while (next && next->id == TT_COMMA) {
+        next_token(parser);
+
+        next = expect_token(parser, "string or identifier",
+                            MASK(TT_STR) | MASK(TT_IDENT));
+        if (parser->has_error)
+          return;
+
+        if (next->id == TT_STR) {
+          fprintf(compiler->output_file, STR_FMT,
+                  STR_ARG(STR(token->lexeme.ptr + 1, token->lexeme.len - 2)));
+        } else {
+          Var *var = get_var(parser, compiler, next);
+          if (parser->has_error)
+            return;
+
+          print_var_loc(compiler->output_file, var);
+        }
+
+        next = peek_token(parser);
+      }
+
+      fprintf(compiler->output_file, "\n");
     } else if (token->id == TT_IF) {
       u32 label_index = compiler->labels_count++;
       u32 end_label_index = (u32) -1;
