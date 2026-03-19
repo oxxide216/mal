@@ -19,7 +19,7 @@ proc main(argc: s64, argv: &&s8) -> s64
     retval 1
   end
 
-  let code = read_file(*(argv + 16))
+  let code = read_file(argv[16])
   if code == 0 as &s8
     error("Could not open ")
     fprint(2, *(argv + 16))

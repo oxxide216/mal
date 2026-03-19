@@ -63,6 +63,10 @@ bool type_is_signed(Type *type) {
   return type->kind >= TypeKindS8 && type->kind <= TypeKindS64;
 }
 
+bool type_is_int(Type *type) {
+  return type->kind >= TypeKindS8 && type->kind <= TypeKindS64;
+}
+
 bool types_can_add(Type *a, Type *b) {
   return (a->kind >= TypeKindS8 && a->kind <= TypeKindS64 && a->kind == b->kind) ||
          (a->kind == TypeKindPtr && b->kind >= TypeKindS8 && b->kind <= TypeKindS64);

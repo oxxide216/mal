@@ -18,6 +18,8 @@ include=include
 assign==
 oparen=\(
 cparen=\)
+obracket=[
+cbracket=]
 str="|'
 colon=:
 amp=&

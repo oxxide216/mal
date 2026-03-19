@@ -434,44 +434,82 @@ static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest
   return NULL;
 }
 
+static Type *compile_cmp_expr(Parser *parser, Compiler *compiler, Dest dest, u32 label_index);
+
 static Type *compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest) {
   Type *type = _compile_primary_expr(parser, compiler, dest);
   if (parser->has_error)
     return NULL;
 
   Token *token = peek_token(parser);
-  while (token && token->id == TT_AS) {
+  while (token && (token->id == TT_AS || token->id == TT_OBRACKET)) {
     next_token(parser);
 
-    Type *new_type = compile_type(parser, compiler);
-    if (parser->has_error)
-      return NULL;
+    if (token->id == TT_AS) {
+      Type *new_type = compile_type(parser, compiler);
+      if (parser->has_error)
+        return NULL;
 
-    if (!types_can_cast(type, new_type)) {
-      parser->has_error = true;
-      PERROR(STR_FMT":%u:%u: ", "Cannot cast ",
-             STR_ARG(token->file_path),
-             token->row + 1, token->col + 1);
-      type_print(stderr, type);
-      fprintf(stderr, " -> ");
-      type_print(stderr, new_type);
-      fprintf(stderr, "\n");
-      return NULL;
+      if (!types_can_cast(type, new_type)) {
+        parser->has_error = true;
+        PERROR(STR_FMT":%u:%u: ", "Cannot cast ",
+               STR_ARG(token->file_path),
+               token->row + 1, token->col + 1);
+        type_print(stderr, type);
+        fprintf(stderr, " -> ");
+        type_print(stderr, new_type);
+        fprintf(stderr, "\n");
+        return NULL;
+      }
+
+      char *loc0 = get_dest_loc(dest, type);
+      char *loc1 = get_dest_loc(dest, new_type);
+
+      if (type->kind == TypeKindS8 &&
+          new_type->kind == TypeKindS32)
+        fprintf(compiler->output_file, "  movsx %s,%s\n", loc1, loc0);
+      if (type->kind == TypeKindS32 &&
+          new_type->kind == TypeKindS64)
+        fprintf(compiler->output_file, "  movsxd %s,%s\n", loc1, loc0);
+
+      type_free(type);
+      type = new_type;
+    } else if (token->id == TT_OBRACKET) {
+      Type *index = compile_cmp_expr(parser, compiler, DestReturn, (u32) -1);
+      if (parser->has_error)
+        return NULL;
+
+      expect_token(parser, "`]`", MASK(TT_CBRACKET));
+      if (parser->has_error)
+        return NULL;
+
+      if (type->kind != TypeKindPtr) {
+        parser->has_error = true;
+        PERROR(STR_FMT":%u:%u: ",
+               "Attempt to dereference a non-pointer value\n",
+               STR_ARG(token->file_path),
+               token->row + 1, token->col + 1);
+        return NULL;
+      }
+
+      if (!type_is_int(index)) {
+        parser->has_error = true;
+        PERROR(STR_FMT":%u:%u: ",
+               "Only integer can be used as an index\n",
+               STR_ARG(token->file_path),
+               token->row + 1, token->col + 1);
+        return NULL;
+      }
+
+      char *loc0 = get_dest_loc(dest, type);
+      char *loc1 = get_dest_loc(dest, type->target);
+      char *loc2 = get_dest_loc(DestReturn, type);
+      fprintf(compiler->output_file, "  mov %s,[%s+%s]\n", loc1, loc0, loc2);
+
+      Type *target = type_clone(type->target);
+      type_free(type);
+      type = target;
     }
-
-    char *loc0 = get_dest_loc(dest, type);
-    char *loc1 = get_dest_loc(dest, new_type);
-
-    if (type->kind == TypeKindS8 &&
-        new_type->kind == TypeKindS32)
-      fprintf(compiler->output_file, "  movsx %s,%s\n", loc1, loc0);
-    if (type->kind == TypeKindS32 &&
-        new_type->kind == TypeKindS64)
-      fprintf(compiler->output_file, "  movsxd %s,%s\n", loc1, loc0);
-
-    type_free(type);
-
-    type = new_type;
 
     token = peek_token(parser);
   }
