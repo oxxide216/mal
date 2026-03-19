@@ -31,7 +31,7 @@ proc read_file(path: &s8) -> &s8
 
   stat(path, stat)
 
-  let size = *(stat as &s64 + STAT_ST_SIZE)
+  let size = *((stat + STAT_ST_SIZE) as &s64)
   free(stat)
 
   let fd = open(path, O_RDWR, 0)

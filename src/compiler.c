@@ -504,7 +504,10 @@ static Type *compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest)
       char *loc0 = get_dest_loc(dest, type);
       char *loc1 = get_dest_loc(dest, type->target);
       char *loc2 = get_dest_loc(DestReturn, type);
-      fprintf(compiler->output_file, "  mov %s,[%s+%s]\n", loc1, loc0, loc2);
+      u32 target_size = type_get_size(type->target);
+
+      fprintf(compiler->output_file, "  mov %s,[%s+%s*%u]\n",
+              loc1, loc0, loc2, target_size);
 
       Type *target = type_clone(type->target);
       type_free(type);
@@ -627,13 +630,26 @@ static Type *compile_add_expr(Parser *parser, Compiler *compiler, Dest dest) {
 
     char *loc0 = get_dest_loc(dest, lhs);
     char *loc1 = get_dest_loc(DestTemp1, rhs);
+    char *loc2 = get_dest_loc(DestReturn, rhs);
+    u32 target_size = 0;
+    if (lhs->kind == TypeKindPtr)
+      target_size = type_get_size(lhs->target);
 
     type_free(rhs);
 
-    if (token->id == TT_PLUS)
-      fprintf(compiler->output_file, "  add %s,%s\n", loc0, loc1);
-    else
-      fprintf(compiler->output_file, "  sub %s,%s\n", loc0, loc1);
+    if (target_size <= 0) {
+      if (token->id == TT_PLUS)
+        fprintf(compiler->output_file, "  add %s,%s\n", loc0, loc1);
+      else
+        fprintf(compiler->output_file, "  sub %s,%s\n", loc0, loc1);
+    } else {
+      fprintf(compiler->output_file, "  mov %s,%u\n", loc2, target_size);
+      fprintf(compiler->output_file, "  mul %s\n", loc1);
+      if (token->id == TT_PLUS)
+        fprintf(compiler->output_file, "  add %s,%s\n", loc0, loc2);
+      else
+        fprintf(compiler->output_file, "  sub %s,%s\n", loc0, loc2);
+    }
 
     token = peek_token(parser);
     if (!token)

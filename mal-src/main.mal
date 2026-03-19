@@ -14,15 +14,15 @@ end
 
 proc main(argc: s64, argv: &&s8) -> s64
   if argc < 3
-    print_usage(*argv)
+    print_usage(argv[0])
     error("No input file")
     retval 1
   end
 
-  let code = read_file(argv[16])
+  let code = read_file(argv[2])
   if code == 0 as &s8
     error("Could not open ")
-    fprint(2, *(argv + 16))
+    fprint(2, argv[2])
     retval 1
   end
 
