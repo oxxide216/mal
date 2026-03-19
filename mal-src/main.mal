@@ -8,7 +8,7 @@ proc print_usage(program_name: &s8)
 end
 
 proc error(str: &s8)
-  fprint(2, "\e[31;1m[ERROR]\e[0m: ")
+  fprint(2, "\e[31;1m[ERROR]\e[0m ")
   fprint(2, str)
 end
 
