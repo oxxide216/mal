@@ -434,7 +434,9 @@ static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest
   return NULL;
 }
 
-static Type *compile_cmp_expr(Parser *parser, Compiler *compiler, Dest dest, u32 label_index);
+static Type *compile_cmp_expr(Parser *parser, Compiler *compiler,
+                              Dest dest, u32 label_index,
+                              bool *found_comparison);
 
 static Type *compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest) {
   Type *type = _compile_primary_expr(parser, compiler, dest);
@@ -475,7 +477,8 @@ static Type *compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest)
       type_free(type);
       type = new_type;
     } else if (token->id == TT_OBRACKET) {
-      Type *index = compile_cmp_expr(parser, compiler, DestReturn, (u32) -1);
+      Type *index = compile_cmp_expr(parser, compiler, DestReturn,
+                                     (u32) -1, NULL);
       if (parser->has_error)
         return NULL;
 
@@ -660,7 +663,9 @@ static Type *compile_add_expr(Parser *parser, Compiler *compiler, Dest dest) {
 }
 
 // ==, !=, <, >, <=, >=
-static Type *compile_cmp_expr(Parser *parser, Compiler *compiler, Dest dest, u32 label_index) {
+static Type *compile_cmp_expr(Parser *parser, Compiler *compiler,
+                              Dest dest, u32 label_index,
+                              bool *found_comparison) {
   Type *lhs = compile_add_expr(parser, compiler, dest);
   if (parser->has_error)
     return NULL;
@@ -677,6 +682,8 @@ static Type *compile_cmp_expr(Parser *parser, Compiler *compiler, Dest dest, u32
     next_token(parser);
 
     found_cmp = true;
+    if (found_comparison)
+      *found_comparison = true;
 
     Type *rhs = compile_add_expr(parser, compiler, DestTemp3);
     if (parser->has_error)
@@ -792,7 +799,7 @@ static Type *compile_expr(Parser *parser, Compiler *compiler, Dest dest) {
   if (was_return)
     dest = DestTemp0;
 
-  Type *type = compile_cmp_expr(parser, compiler, dest, (u32) -1);
+  Type *type = compile_cmp_expr(parser, compiler, dest, (u32) -1, NULL);
   if (parser->has_error)
     return NULL;
 
@@ -983,10 +990,19 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
     } else if (token->id == TT_IF) {
       u32 label_index = compiler->labels_count++;
       u32 end_label_index = (u32) -1;
+      bool found_comparison = false;
 
-      compile_cmp_expr(parser, compiler, DestTemp0, label_index);
+      Type *type = compile_cmp_expr(parser, compiler, DestTemp0,
+                                    label_index, &found_comparison);
       if (parser->has_error)
         return;
+
+      if (!found_comparison) {
+        char *loc = get_dest_loc(DestTemp0, type);
+        fprintf(compiler->output_file, "  cmp %s,0\n", loc);
+        fprintf(compiler->output_file, "  je .l%u\n", label_index);
+        found_comparison = false;
+      }
 
       compile_instrs(parser, compiler);
       if (parser->has_error)
@@ -1005,7 +1021,14 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
 
       while (next->id == TT_ELIF) {
         label_index = compiler->labels_count++;
-        compile_cmp_expr(parser, compiler, DestTemp0, label_index);
+        type = compile_cmp_expr(parser, compiler, DestTemp0,
+                                label_index, &found_comparison);
+
+        if (!found_comparison) {
+          char *loc = get_dest_loc(DestTemp0, type);
+          fprintf(compiler->output_file, "  cmp %s,0\n", loc);
+          fprintf(compiler->output_file, "  je .l%u\n", label_index);
+        }
 
         compile_instrs(parser, compiler);
         if (parser->has_error)
@@ -1039,12 +1062,20 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
     } else if (token->id == TT_WHILE) {
       u32 begin_label_index = compiler->labels_count++;
       u32 end_label_index = compiler->labels_count++;
+      bool found_comparison = false;
 
       fprintf(compiler->output_file, ".l%u\n", begin_label_index);
 
-      compile_cmp_expr(parser, compiler, DestTemp0, end_label_index);
+      Type *type = compile_cmp_expr(parser, compiler, DestTemp0,
+                                    end_label_index, &found_comparison);
       if (parser->has_error)
         return;
+
+      if (!found_comparison) {
+        char *loc = get_dest_loc(DestTemp0, type);
+        fprintf(compiler->output_file, "  cmp %s,0\n", loc);
+        fprintf(compiler->output_file, "  je .l%u\n", end_label_index);
+      }
 
       compile_instrs(parser, compiler);
       if (parser->has_error)
