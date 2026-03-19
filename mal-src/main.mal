@@ -9,7 +9,7 @@ end
 
 proc error(str: &s8)
   fprint(2, "\e[31;1m[ERROR]\e[0m: ")
-  fprintln(2, str)
+  fprint(2, str)
 end
 
 proc main(argc: s64, argv: &&s8) -> s64
@@ -22,7 +22,7 @@ proc main(argc: s64, argv: &&s8) -> s64
   let code = read_file(argv[2])
   if code == 0 as &s8
     error("Could not open ")
-    fprint(2, argv[2])
+    fprintln(2, argv[2])
     retval 1
   end
 

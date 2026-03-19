@@ -50,3 +50,9 @@ proc munmap(address: &s8, len: s64)
   "mov rsi,", len
   "syscall"
 end
+
+proc exit(code: s64)
+  "mov rax,60"
+  "mov rdi,", code
+  "syscall"
+end

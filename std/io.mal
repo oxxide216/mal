@@ -28,10 +28,10 @@ proc read_file(path: &s8) -> &s8
   let O_RDWR = 2
 
   let stat = malloc(STAT_SIZE)
-
   stat(path, stat)
 
   let size = *((stat + STAT_ST_SIZE) as &s64)
+
   free(stat)
 
   let fd = open(path, O_RDWR, 0)
