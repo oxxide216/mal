@@ -849,8 +849,7 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
       };
       DA_APPEND(compiler->vars, new_var);
     } else if (token->id == TT_RET) {
-      if ((token = peek_token(parser)) && token->id != TT_END)
-        fprintf(compiler->output_file, "  jmp .end\n");
+      fprintf(compiler->output_file, "  jmp .end\n");
     } else if (token->id == TT_RETVAL) {
       Type *type = compile_expr(parser, compiler, DestReturn);
       if (parser->has_error)
@@ -868,8 +867,7 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
 
       type_free(type);
 
-      if ((token = peek_token(parser)) && token->id != TT_END)
-        fprintf(compiler->output_file, "  jmp .end\n");
+      fprintf(compiler->output_file, "  jmp .end\n");
     } else if (token->id == TT_IDENT) {
       Token *next = expect_token(parser, "`=`, `(` or `:=`",
                                  MASK(TT_ASSIGN) | MASK(TT_OPAREN) |
