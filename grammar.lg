@@ -14,6 +14,7 @@ elif=elif
 else=else
 while=while
 include=include
+sizeof=sizeof
 
 assign==
 oparen=\(

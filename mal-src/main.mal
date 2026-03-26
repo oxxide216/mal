@@ -27,4 +27,6 @@ proc main(argc: s64, argv: &&s8) -> s64
   end
 
   print(code)
+
+  retval 0
 end

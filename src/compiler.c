@@ -370,16 +370,16 @@ static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest
     token = peek_token(parser);
   }
 
-  token = expect_token(parser, "identifier, integer, string, `(`, `&` or `*`",
-                       MASK(TT_INT) | MASK(TT_STR) |
-                       MASK(TT_IDENT) | MASK(TT_OPAREN));
+  token = expect_token(parser, "identifier, integer, string, `sizeof`, `(`, `&` or `*`",
+                       MASK(TT_INT) | MASK(TT_STR) | MASK(TT_IDENT) |
+                       MASK(TT_OPAREN) | MASK(TT_SIZEOF));
   if (parser->has_error)
     return NULL;
 
   if (token->id == TT_INT) {
     Type *type = type_new(TypeKindS64, NULL);
     char *loc = get_dest_loc(dest, type);
-    fprintf(compiler->output_file, "  mov %s, "STR_FMT"\n", loc, STR_ARG(token->lexeme));
+    fprintf(compiler->output_file, "  mov %s,"STR_FMT"\n", loc, STR_ARG(token->lexeme));
 
     return type;
   } else if (token->id == TT_STR) {
@@ -427,6 +427,17 @@ static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest
     expect_token(parser, "`)`", MASK(TT_CPAREN));
     if (parser->has_error)
       return NULL;
+
+    return type;
+  } else if (token->id == TT_SIZEOF) {
+    Type *target = compile_type(parser, compiler);
+    if (parser->has_error)
+      return NULL;
+
+    u64 size = type_get_size(target);
+    Type *type = type_new(TypeKindS64, NULL);
+    char *loc = get_dest_loc(dest, type);
+    fprintf(compiler->output_file, "  mov %s,%lu\n", loc, size);
 
     return type;
   }
