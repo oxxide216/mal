@@ -887,9 +887,9 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
 
       fprintf(compiler->output_file, "  jmp .end\n");
     } else if (token->id == TT_IDENT) {
-      Token *next = expect_token(parser, "`=`, `(` or `:=`",
+      Token *next = expect_token(parser, "`=`, `(`, `:=` or `[`",
                                  MASK(TT_ASSIGN) | MASK(TT_OPAREN) |
-                                 MASK(TT_CASSIGN));
+                                 MASK(TT_CASSIGN) | MASK(TT_OBRACKET));
       if (parser->has_error)
         return;
 
@@ -968,6 +968,56 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
         print_var_loc(compiler->output_file, var);
         fprintf(compiler->output_file, "\n");
         fprintf(compiler->output_file, "  mov [rax],%s\n", loc);
+      } else if (next->id == TT_OBRACKET) {
+        Type *index = compile_cmp_expr(parser, compiler, DestReturn,
+                                     (u32) -1, NULL);
+        if (parser->has_error)
+          return;
+
+        expect_token(parser, "`]`", MASK(TT_CBRACKET));
+        if (parser->has_error)
+          return;
+
+        expect_token(parser, "`=`", MASK(TT_ASSIGN));
+        if (parser->has_error)
+          return;
+
+        Type *type = compile_expr(parser, compiler, DestTemp0);
+        if (parser->has_error)
+          return;
+
+        Var *var = get_var(parser, compiler, token);
+        if (parser->has_error)
+          return;
+
+        if (var->type->kind != TypeKindPtr) {
+          parser->has_error = true;
+          PERROR(STR_FMT":%u:%u: ",
+                 "Attempt to dereference a non-pointer value\n",
+                 STR_ARG(token->file_path),
+                 token->row + 1, token->col + 1);
+          return;
+        }
+
+        if (!type_is_int(index)) {
+          parser->has_error = true;
+          PERROR(STR_FMT":%u:%u: ",
+                 "Only integer can be used as an index\n",
+                 STR_ARG(token->file_path),
+                 token->row + 1, token->col + 1);
+          return;
+        }
+
+        char *loc0 = get_dest_loc(DestTemp1, var->type);
+        char *loc1 = get_dest_loc(DestReturn, index);
+        char *loc2 = get_dest_loc(DestTemp0, type);
+        u32 target_size = type_get_size(type);
+
+        fprintf(compiler->output_file, "  mov %s,", loc0);
+        print_var_loc(compiler->output_file, var);
+        fprintf(compiler->output_file, "\n");
+        fprintf(compiler->output_file, "  mov [%s+%s*%u],%s\n",
+                loc0, loc1, target_size, loc2);
       }
     } else if (token->id == TT_STR) {
       fprintf(compiler->output_file, "  "STR_FMT,
