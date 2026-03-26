@@ -334,7 +334,9 @@ static void print_var_loc(FILE *output_file, Var *var) {
     fprintf(output_file, "[rbp-%u]", var->offset + CALLEE_PRESERVED_REGS_SIZE);
 }
 
-static Type *compile_add_expr(Parser *parser, Compiler *compiler, Dest dest);
+static Type *compile_cmp_expr(Parser *parser, Compiler *compiler,
+                              Dest dest, u32 label_index,
+                              bool *found_comparison);
 
 static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest) {
   Token *token = peek_token(parser);
@@ -430,7 +432,7 @@ static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest
       return type_clone(var->type);
     }
   } else if (token->id == TT_OPAREN) {
-    Type *type = compile_add_expr(parser, compiler, dest);
+    Type *type = compile_cmp_expr(parser, compiler, dest, (u32) -1, NULL);
     if (parser->has_error)
       return NULL;
 
@@ -454,10 +456,6 @@ static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest
 
   return NULL;
 }
-
-static Type *compile_cmp_expr(Parser *parser, Compiler *compiler,
-                              Dest dest, u32 label_index,
-                              bool *found_comparison);
 
 static Type *compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest) {
   Type *type = _compile_primary_expr(parser, compiler, dest);
@@ -692,7 +690,7 @@ static Type *compile_bit_expr(Parser *parser, Compiler *compiler, Dest dest) {
   if (!token)
     return lhs;
 
-  while (token->id == TT_OR || token->id == TT_AND || token->id == TT_XOR) {
+  while (token->id == TT_OR || token->id == TT_AMP || token->id == TT_XOR) {
     next_token(parser);
 
     Type *rhs = compile_add_expr(parser, compiler, DestTemp1);
@@ -707,7 +705,7 @@ static Type *compile_bit_expr(Parser *parser, Compiler *compiler, Dest dest) {
       type_print(stderr, lhs);
       if (token->id == TT_OR)
         fprintf(stderr, " | ");
-      else if (token->id == TT_AND)
+      else if (token->id == TT_AMP)
         fprintf(stderr, " & ");
       else
         fprintf(stderr, " ^ ");
@@ -723,7 +721,7 @@ static Type *compile_bit_expr(Parser *parser, Compiler *compiler, Dest dest) {
 
     if (token->id == TT_OR)
       fprintf(compiler->output_file, "  or %s,%s\n", loc0, loc1);
-    else if (token->id == TT_AND)
+    else if (token->id == TT_AMP)
       fprintf(compiler->output_file, "  and %s,%s\n", loc0, loc1);
     else
       fprintf(compiler->output_file, "  xor %s,%s\n", loc0, loc1);
