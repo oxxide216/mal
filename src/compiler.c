@@ -455,7 +455,9 @@ static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest
   return NULL;
 }
 
-static Type *compile_bit_expr(Parser *parser, Compiler *compiler, Dest dest);
+static Type *compile_cmp_expr(Parser *parser, Compiler *compiler,
+                              Dest dest, u32 label_index,
+                              bool *found_comparison);
 
 static Type *compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest) {
   Type *type = _compile_primary_expr(parser, compiler, dest);
@@ -496,7 +498,7 @@ static Type *compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest)
       type_free(type);
       type = new_type;
     } else if (token->id == TT_OBRACKET) {
-      Type *index = compile_bit_expr(parser, compiler, DestReturn);
+      Type *index = compile_cmp_expr(parser, compiler, DestReturn, (u32) -1, NULL);
       if (parser->has_error)
         return NULL;
 
@@ -680,11 +682,65 @@ static Type *compile_add_expr(Parser *parser, Compiler *compiler, Dest dest) {
   return lhs;
 }
 
+// |, &. ^
+static Type *compile_bit_expr(Parser *parser, Compiler *compiler, Dest dest) {
+  Type *lhs = compile_add_expr(parser, compiler, dest);
+  if (parser->has_error)
+    return NULL;
+
+  Token *token = peek_token(parser);
+  if (!token)
+    return lhs;
+
+  while (token->id == TT_OR || token->id == TT_AND || token->id == TT_XOR) {
+    next_token(parser);
+
+    Type *rhs = compile_add_expr(parser, compiler, DestTemp1);
+    if (parser->has_error)
+      return NULL;
+
+    if (!type_eq(lhs, rhs)) {
+      parser->has_error = true;
+      PERROR(STR_FMT":%u:%u: ", "Cannot do ",
+             STR_ARG(token->file_path),
+             token->row + 1, token->col + 1);
+      type_print(stderr, lhs);
+      if (token->id == TT_OR)
+        fprintf(stderr, " | ");
+      else if (token->id == TT_AND)
+        fprintf(stderr, " & ");
+      else
+        fprintf(stderr, " ^ ");
+      type_print(stderr, rhs);
+      fprintf(stderr, "\n");
+      return NULL;
+    }
+
+    char *loc0 = get_dest_loc(dest, lhs);
+    char *loc1 = get_dest_loc(DestTemp4, rhs);
+
+    type_free(rhs);
+
+    if (token->id == TT_OR)
+      fprintf(compiler->output_file, "  or %s,%s\n", loc0, loc1);
+    else if (token->id == TT_AND)
+      fprintf(compiler->output_file, "  and %s,%s\n", loc0, loc1);
+    else
+      fprintf(compiler->output_file, "  xor %s,%s\n", loc0, loc1);
+
+    token = peek_token(parser);
+    if (!token)
+      return lhs;
+  }
+
+  return lhs;
+}
+
 // ==, !=, <, >, <=, >=
 static Type *compile_cmp_expr(Parser *parser, Compiler *compiler,
                               Dest dest, u32 label_index,
                               bool *found_comparison) {
-  Type *lhs = compile_add_expr(parser, compiler, dest);
+  Type *lhs = compile_bit_expr(parser, compiler, dest);
   if (parser->has_error)
     return NULL;
 
@@ -703,7 +759,7 @@ static Type *compile_cmp_expr(Parser *parser, Compiler *compiler,
     if (found_comparison)
       *found_comparison = true;
 
-    Type *rhs = compile_add_expr(parser, compiler, DestTemp3);
+    Type *rhs = compile_bit_expr(parser, compiler, DestTemp3);
     if (parser->has_error)
       return NULL;
 
@@ -833,67 +889,13 @@ static Type *compile_cmp_expr(Parser *parser, Compiler *compiler,
   return lhs;
 }
 
-// |, &. ^
-static Type *compile_bit_expr(Parser *parser, Compiler *compiler, Dest dest) {
-  Type *lhs = compile_cmp_expr(parser, compiler, dest, (u32) -1, NULL);
-  if (parser->has_error)
-    return NULL;
-
-  Token *token = peek_token(parser);
-  if (!token)
-    return lhs;
-
-  while (token->id == TT_OR || token->id == TT_AND || token->id == TT_XOR) {
-    next_token(parser);
-
-    Type *rhs = compile_cmp_expr(parser, compiler, DestTemp1, (u32) -1, NULL);
-    if (parser->has_error)
-      return NULL;
-
-    if (!type_eq(lhs, rhs)) {
-      parser->has_error = true;
-      PERROR(STR_FMT":%u:%u: ", "Cannot do ",
-             STR_ARG(token->file_path),
-             token->row + 1, token->col + 1);
-      type_print(stderr, lhs);
-      if (token->id == TT_OR)
-        fprintf(stderr, " | ");
-      else if (token->id == TT_AND)
-        fprintf(stderr, " & ");
-      else
-        fprintf(stderr, " ^ ");
-      type_print(stderr, rhs);
-      fprintf(stderr, "\n");
-      return NULL;
-    }
-
-    char *loc0 = get_dest_loc(dest, lhs);
-    char *loc1 = get_dest_loc(DestTemp4, rhs);
-
-    type_free(rhs);
-
-    if (token->id == TT_OR)
-      fprintf(compiler->output_file, "  or %s,%s\n", loc0, loc1);
-    else if (token->id == TT_AND)
-      fprintf(compiler->output_file, "  and %s,%s\n", loc0, loc1);
-    else
-      fprintf(compiler->output_file, "  xor %s,%s\n", loc0, loc1);
-
-    token = peek_token(parser);
-    if (!token)
-      return lhs;
-  }
-
-  return lhs;
-}
-
 static Type *compile_expr(Parser *parser, Compiler *compiler, Dest dest) {
   bool was_return = dest == DestReturn;
 
   if (was_return)
     dest = DestTemp0;
 
-  Type *type = compile_bit_expr(parser, compiler, dest);
+  Type *type = compile_cmp_expr(parser, compiler, dest, (u32) -1, NULL);
   if (parser->has_error)
     return NULL;
 
