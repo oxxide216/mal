@@ -38,6 +38,9 @@ ls=<
 le=<=
 gt=>
 ge=>=
+or=\|
+and=&
+xor=^
 
 int=\-?0-9+
 ident=(_|a-z|A-Z)(_|a-z|A-Z|0-9)*

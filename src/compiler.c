@@ -11,7 +11,7 @@
 #define MASK(id) (1lu << (id))
 
 #define STACK_FRAME_BEGIN_SIZE     16
-#define CALLEE_PRESERVED_REGS_SIZE 24
+#define CALLEE_PRESERVED_REGS_SIZE 40
 
 typedef struct {
   Str    code;
@@ -76,6 +76,7 @@ typedef enum {
   DestTemp1,
   DestTemp2,
   DestTemp3,
+  DestTemp4,
   DestRem,
 } Dest;
 
@@ -152,6 +153,15 @@ static char *get_dest_loc(Dest dest, Type *type) {
     case TypeKindS32:  return "r14d";
     case TypeKindS64:  return "r14";
     case TypeKindPtr:  return "r14";
+    }
+  } else if (dest == DestTemp4) {
+    switch (type->kind) {
+    case TypeKindUnit: return NULL;
+    case TypeKindS8:   return "r15b";
+    case TypeKindS16:  return "r15w";
+    case TypeKindS32:  return "r15d";
+    case TypeKindS64:  return "r15";
+    case TypeKindPtr:  return "r15";
     }
   } else if (dest == DestRem) {
     switch (type->kind) {
@@ -445,9 +455,7 @@ static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest
   return NULL;
 }
 
-static Type *compile_cmp_expr(Parser *parser, Compiler *compiler,
-                              Dest dest, u32 label_index,
-                              bool *found_comparison);
+static Type *compile_bit_expr(Parser *parser, Compiler *compiler, Dest dest);
 
 static Type *compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest) {
   Type *type = _compile_primary_expr(parser, compiler, dest);
@@ -488,8 +496,7 @@ static Type *compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest)
       type_free(type);
       type = new_type;
     } else if (token->id == TT_OBRACKET) {
-      Type *index = compile_cmp_expr(parser, compiler, DestReturn,
-                                     (u32) -1, NULL);
+      Type *index = compile_bit_expr(parser, compiler, DestReturn);
       if (parser->has_error)
         return NULL;
 
@@ -723,11 +730,31 @@ static Type *compile_cmp_expr(Parser *parser, Compiler *compiler,
       return NULL;
     }
 
-    char *loc0 = get_dest_loc(dest, lhs);
-    char *loc1 = get_dest_loc(DestTemp3, rhs);
-    char *loc2 = get_dest_loc(DestReturn, lhs);
+    Type *temp_lhs = lhs;
+    if (temp_lhs->kind == TypeKindS8)
+      temp_lhs = type_new(TypeKindS16, NULL);
 
-    type_free(rhs);
+    Type *temp_rhs = rhs;
+    if (temp_rhs->kind == TypeKindS8)
+      temp_rhs = type_new(TypeKindS16, NULL);
+
+    char *loc0 = get_dest_loc(dest, temp_lhs);
+    char *loc1 = get_dest_loc(DestTemp3, temp_rhs);
+    char *loc2 = get_dest_loc(DestReturn, temp_lhs);
+
+    if (lhs->kind == TypeKindS8) {
+      char *temp_loc0 = get_dest_loc(dest, lhs);
+      fprintf(compiler->output_file, "  movzx %s,%s\n", loc0, temp_loc0);
+      type_free(temp_lhs);
+    }
+
+    if (rhs->kind == TypeKindS8) {
+      char *temp_loc1 = get_dest_loc(DestTemp3, rhs);
+      char *temp_loc2 = get_dest_loc(DestReturn, rhs);
+      fprintf(compiler->output_file, "  movzx %s,%s\n", loc1, temp_loc1);
+      fprintf(compiler->output_file, "  movzx %s,%s\n", loc2, temp_loc2);
+      type_free(temp_rhs);
+    }
 
     fprintf(compiler->output_file, "  cmp %s,%s\n", loc0, loc1);
 
@@ -791,6 +818,8 @@ static Type *compile_cmp_expr(Parser *parser, Compiler *compiler,
       }
     }
 
+    type_free(rhs);
+
     token = peek_token(parser);
     if (!token)
       return result;
@@ -804,13 +833,67 @@ static Type *compile_cmp_expr(Parser *parser, Compiler *compiler,
   return lhs;
 }
 
+// |, &. ^
+static Type *compile_bit_expr(Parser *parser, Compiler *compiler, Dest dest) {
+  Type *lhs = compile_cmp_expr(parser, compiler, dest, (u32) -1, NULL);
+  if (parser->has_error)
+    return NULL;
+
+  Token *token = peek_token(parser);
+  if (!token)
+    return lhs;
+
+  while (token->id == TT_OR || token->id == TT_AND || token->id == TT_XOR) {
+    next_token(parser);
+
+    Type *rhs = compile_cmp_expr(parser, compiler, DestTemp1, (u32) -1, NULL);
+    if (parser->has_error)
+      return NULL;
+
+    if (!type_eq(lhs, rhs)) {
+      parser->has_error = true;
+      PERROR(STR_FMT":%u:%u: ", "Cannot do ",
+             STR_ARG(token->file_path),
+             token->row + 1, token->col + 1);
+      type_print(stderr, lhs);
+      if (token->id == TT_OR)
+        fprintf(stderr, " | ");
+      else if (token->id == TT_AND)
+        fprintf(stderr, " & ");
+      else
+        fprintf(stderr, " ^ ");
+      type_print(stderr, rhs);
+      fprintf(stderr, "\n");
+      return NULL;
+    }
+
+    char *loc0 = get_dest_loc(dest, lhs);
+    char *loc1 = get_dest_loc(DestTemp4, rhs);
+
+    type_free(rhs);
+
+    if (token->id == TT_OR)
+      fprintf(compiler->output_file, "  or %s,%s\n", loc0, loc1);
+    else if (token->id == TT_AND)
+      fprintf(compiler->output_file, "  and %s,%s\n", loc0, loc1);
+    else
+      fprintf(compiler->output_file, "  xor %s,%s\n", loc0, loc1);
+
+    token = peek_token(parser);
+    if (!token)
+      return lhs;
+  }
+
+  return lhs;
+}
+
 static Type *compile_expr(Parser *parser, Compiler *compiler, Dest dest) {
   bool was_return = dest == DestReturn;
 
   if (was_return)
     dest = DestTemp0;
 
-  Type *type = compile_cmp_expr(parser, compiler, dest, (u32) -1, NULL);
+  Type *type = compile_bit_expr(parser, compiler, dest);
   if (parser->has_error)
     return NULL;
 
@@ -1345,6 +1428,8 @@ bool compile(Str code, Str file_path, FILE *output_file) {
       fprintf(output_file, "  push rbx\n");
       fprintf(output_file, "  push r12\n");
       fprintf(output_file, "  push r13\n");
+      fprintf(output_file, "  push r14\n");
+      fprintf(output_file, "  push r15\n");
 
       compiler.stack_size = 0;
       compiler.labels_count = 0;
@@ -1382,6 +1467,8 @@ bool compile(Str code, Str file_path, FILE *output_file) {
       }
 
       fprintf(output_file, ".end:\n");
+      fprintf(output_file, "  pop r15\n");
+      fprintf(output_file, "  pop r14\n");
       fprintf(output_file, "  pop r13\n");
       fprintf(output_file, "  pop r12\n");
       fprintf(output_file, "  pop rbx\n");
