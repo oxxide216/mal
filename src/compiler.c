@@ -1364,7 +1364,7 @@ bool compile(Str code, Str file_path, FILE *output_file) {
         };
         DA_APPEND(compiler.vars, new_var);
 
-        params_stack_size += type_get_size(param->type);
+        params_stack_size += type_get_size(get_type_on_stack(param->type));
       }
 
       compile_instrs(&parser, &compiler);
