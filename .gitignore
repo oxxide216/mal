@@ -5,4 +5,5 @@
 /*.o
 /test
 /test-min
+/_mal
 src/grammar.h
