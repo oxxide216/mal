@@ -1206,6 +1206,7 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
     } else if (token->id == TT_WHILE) {
       u32 begin_label_index = compiler->labels_count++;
       u32 end_label_index = compiler->labels_count++;
+      u32 prev_stack_size = compiler->stack_size;
       bool found_comparison = false;
 
       fprintf(compiler->output_file, ".l%u\n", begin_label_index);
@@ -1228,6 +1229,10 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
       expect_token(parser, "`end`", MASK(TT_END));
       if (parser->has_error)
         return;
+
+      u32 diff = compiler->stack_size - prev_stack_size;
+      if (diff > 0)
+        fprintf(compiler->output_file, "  add rsp,%u\n", diff);
 
       fprintf(compiler->output_file, "  jmp .l%u\n", begin_label_index);
       fprintf(compiler->output_file, ".l%u\n", end_label_index);
