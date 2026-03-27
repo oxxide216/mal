@@ -350,7 +350,7 @@ static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest
       if (parser->has_error)
         return NULL;
 
-      Type *ptr_type = type_new(TypeKindPtr, type_clone(var->type));;
+      Type *ptr_type = type_new(TypeKindPtr, type_clone(var->type));
 
       char *loc = get_dest_loc(dest, ptr_type);
       fprintf(compiler->output_file, "  lea %s,", loc);
@@ -383,8 +383,8 @@ static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest
   }
 
   token = expect_token(parser, "identifier, integer, string, `sizeof`, `(`, `&` or `*`",
-                       MASK(TT_INT) | MASK(TT_STR) | MASK(TT_IDENT) |
-                       MASK(TT_OPAREN) | MASK(TT_SIZEOF));
+                       MASK(TT_INT) | MASK(TT_STR) | MASK(TT_CHAR) |
+                       MASK(TT_IDENT) | MASK(TT_OPAREN) | MASK(TT_SIZEOF));
   if (parser->has_error)
     return NULL;
 
@@ -401,7 +401,26 @@ static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest
 
     DA_APPEND(compiler->strs, token->lexeme);
 
-    compiler->temp_sb.len = 0;
+    return type;
+  } else if (token->id == TT_CHAR) {
+    Type *type = type_new(TypeKindS8, NULL);
+
+    char ch = token->lexeme.ptr[1];
+    if (ch == '\\') {
+      switch (token->lexeme.ptr[2]) {
+      case 'n': ch = '\n'; break;
+      case 'r': ch = '\r'; break;
+      case 't': ch = '\t'; break;
+      case 'v': ch = '\v'; break;
+      case 'b': ch = '\b'; break;
+      case 'e': ch = '\e'; break;
+      case '0': ch = '\0'; break;
+      default:  ch = token->lexeme.ptr[2];
+      }
+    }
+
+    char *loc = get_dest_loc(dest, type);
+    fprintf(compiler->output_file, "  mov %s, %u\n", loc, ch);
 
     return type;
   } else if (token->id == TT_IDENT) {

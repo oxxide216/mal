@@ -104,6 +104,65 @@ bool lex(Tokens *tokens, Str code, Str file_path, StringBuilder *temp_sb) {
       lexeme = sb_to_str(*temp_sb);
 
       temp_sb->len = 0;
+    } else if (id == TT_CHAR) {
+      sb_push_char(temp_sb, code.ptr[-1]);
+
+      if (code.len < 2 || (code.ptr[0] == '\\' && code.len < 3)) {
+        PERROR(STR_FMT":%u:%u: ", "Character literal was not closed\n",
+               STR_ARG(file_path), row + 1, col + 1);
+
+        for (u32 i = 0; i < tokens->len; ++i)
+          free(tokens->items[i].lexeme.ptr);
+        if (tokens->items)
+          free(tokens->items);
+
+        return false;
+      }
+
+      u32 next_len;
+      wchar next = get_next_wchar(code, 0, &next_len);
+
+      for (u32 i = 0; i < next_len; ++i)
+        if (code.ptr[i])
+          sb_push_char(temp_sb, code.ptr[i]);
+
+      code.ptr += next_len;
+      code.len -= next_len;
+      ++current_col;
+
+      if (next == U'\\') {
+        next = get_next_wchar(code, 0, &next_len);
+
+        for (u32 i = 0; i < next_len; ++i)
+          if (code.ptr[i])
+            sb_push_char(temp_sb, code.ptr[i]);
+
+        code.ptr += next_len;
+        code.len -= next_len;
+        ++current_col;
+      }
+
+      if (code.len == 0 || code.ptr[0] != '\'') {
+        PERROR(STR_FMT":%u:%u: ", "Character literal was not closed\n",
+               STR_ARG(file_path), row + 1, col + 1);
+
+        for (u32 i = 0; i < tokens->len; ++i)
+          free(tokens->items[i].lexeme.ptr);
+        if (tokens->items)
+          free(tokens->items);
+
+        return false;
+      }
+
+      sb_push_char(temp_sb, code.ptr[0]);
+
+      ++code.ptr;
+      --code.len;
+      ++current_col;
+
+      lexeme = sb_to_str(*temp_sb);
+
+      temp_sb->len = 0;
     } else {
       current_col += char_len;
     }
