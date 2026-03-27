@@ -693,7 +693,7 @@ static Type *compile_bit_expr(Parser *parser, Compiler *compiler, Dest dest) {
   while (token->id == TT_OR || token->id == TT_AMP || token->id == TT_XOR) {
     next_token(parser);
 
-    Type *rhs = compile_add_expr(parser, compiler, DestTemp1);
+    Type *rhs = compile_add_expr(parser, compiler, DestTemp4);
     if (parser->has_error)
       return NULL;
 
