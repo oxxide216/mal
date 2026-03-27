@@ -62,7 +62,6 @@ typedef struct {
   Strs           strs;
   Procs          procs;
   NamedTypes     named_types;
-  Types          param_types;
   u32            stack_size;
   u32            labels_count;
   FILE          *output_file;
@@ -210,10 +209,8 @@ static Type *compile_type(Parser *parser, Compiler *compiler) {
 static Type *compile_expr(Parser *parser, Compiler *compiler, Dest dest);
 
 static Type *compile_proc_call(Parser *parser, Compiler *compiler, Token *name) {
-  for (u32 i = 0; i < compiler->param_types.len; ++i)
-    type_free(compiler->param_types.items[i]);
+  Types param_types = {0};
 
-  compiler->param_types.len = 0;
   u32 params_size = 0;
 
   Token *token = peek_token(parser);
@@ -238,7 +235,7 @@ static Type *compile_proc_call(Parser *parser, Compiler *compiler, Token *name) 
     fprintf(compiler->output_file, "  push %s\n", loc);
 
     token = peek_token(parser);
-    DA_APPEND(compiler->param_types, type);
+    DA_APPEND(param_types, type);
     params_size += type_get_size(stack_type);
 
     type_free(stack_type);
@@ -254,7 +251,7 @@ static Type *compile_proc_call(Parser *parser, Compiler *compiler, Token *name) 
     if (!str_eq(proc->name, name->lexeme))
       continue;
 
-    if (proc->params.len != compiler->param_types.len)
+    if (proc->params.len != param_types.len)
       continue;
 
     bool found = true;
@@ -262,7 +259,7 @@ static Type *compile_proc_call(Parser *parser, Compiler *compiler, Token *name) 
     for (u32 j = 0; j < proc->params.len; ++j) {
       Param *param = proc->params.items + j;
 
-      if (!type_eq(param->type, compiler->param_types.items[j])) {
+      if (!type_eq(param->type, param_types.items[j])) {
         found = false;
         break;
       }
@@ -275,6 +272,9 @@ static Type *compile_proc_call(Parser *parser, Compiler *compiler, Token *name) 
     if (params_size > 0)
       fprintf(compiler->output_file, "  add rsp,%u\n", params_size);
 
+    for (u32 i = 0; i < param_types.len; ++i)
+      type_free(param_types.items[i]);
+
     return type_clone(proc->return_type);
   }
 
@@ -283,10 +283,10 @@ static Type *compile_proc_call(Parser *parser, Compiler *compiler, Token *name) 
          STR_ARG(name->file_path),
          name->row + 1, name->col + 1,
          STR_ARG(name->lexeme));
-  for (u32 i = 0; i < compiler->param_types.len; ++i) {
+  for (u32 i = 0; i < param_types.len; ++i) {
     if (i > 0)
       fprintf(stderr, ", ");
-    type_print(stderr, compiler->param_types.items[i]);
+    type_print(stderr, param_types.items[i]);
   }
   fprintf(stderr, ")`\n");
 
@@ -1330,9 +1330,6 @@ static void cleanup(Parser *parser, Compiler *compiler, Strs *included_files) {
   for (u32 i = 0; i < compiler->named_types.len; ++i)
     type_free(compiler->named_types.items[i].type);
 
-  for (u32 i = 0; i < compiler->param_types.len; ++i)
-    type_free(compiler->param_types.items[i]);
-
   for (u32 i = 0; i < included_files->len; ++i)
     free(included_files->items[i].ptr);
 
@@ -1346,8 +1343,6 @@ static void cleanup(Parser *parser, Compiler *compiler, Strs *included_files) {
     free(compiler->procs.items);
   if (compiler->named_types.items)
     free(compiler->named_types.items);
-  if (compiler->param_types.items)
-    free(compiler->param_types.items);
   if (compiler->temp_sb.buffer)
     free(compiler->temp_sb.buffer);
   if (included_files->items)
