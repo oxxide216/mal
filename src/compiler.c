@@ -397,7 +397,7 @@ static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest
   } else if (token->id == TT_STR) {
     Type *type = type_new(TypeKindPtr, type_new(TypeKindS8, NULL));
     char *loc = get_dest_loc(dest, type);
-    fprintf(compiler->output_file, "  lea %s, [str@%u]\n", loc, compiler->strs.len);
+    fprintf(compiler->output_file, "  lea %s,[str@%u]\n", loc, compiler->strs.len);
 
     DA_APPEND(compiler->strs, token->lexeme);
 
@@ -420,7 +420,7 @@ static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest
     }
 
     char *loc = get_dest_loc(dest, type);
-    fprintf(compiler->output_file, "  mov %s, %u\n", loc, ch);
+    fprintf(compiler->output_file, "  mov %s,%u\n", loc, ch);
 
     return type;
   } else if (token->id == TT_IDENT) {
