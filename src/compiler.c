@@ -667,7 +667,7 @@ static Type *compile_add_expr(Parser *parser, Compiler *compiler) {
 
     type_free(rhs);
 
-    if (target_size == 0) {
+    if (target_size <= 1) {
       if (token->id == TT_PLUS)
         fprintf(compiler->output_file, "  add %s,%s\n", loc0, loc1);
       else
@@ -1158,17 +1158,17 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
       if (parser->has_error)
         return;
 
-      Token *next = expect_token(parser, "`elif`, `else` or `end`",
-                                 MASK(TT_ELIF) | MASK(TT_ELSE) | MASK(TT_END));
-      if (parser->has_error)
-        return;
-
       u32 diff = compiler->stack_size - prev_stack_size;
       if (diff > 0) {
         fprintf(compiler->output_file, "  add rsp,%u\n", diff);
         compiler->stack_size = prev_stack_size;
       }
       compiler->vars.len = prev_vars_len;
+
+      Token *next = expect_token(parser, "`elif`, `else` or `end`",
+                                 MASK(TT_ELIF) | MASK(TT_ELSE) | MASK(TT_END));
+      if (parser->has_error)
+        return;
 
       if (next->id != TT_END) {
         end_label_index = compiler->labels_count++;
@@ -1195,17 +1195,17 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
         if (parser->has_error)
           return;
 
-        next = expect_token(parser, "`elif`, `else` or `end`",
-                            MASK(TT_ELIF) | MASK(TT_ELSE) | MASK(TT_END));
-        if (parser->has_error)
-          return;
-
         u32 diff = compiler->stack_size - prev_stack_size;
         if (diff > 0) {
           fprintf(compiler->output_file, "  add rsp,%u\n", diff);
           compiler->stack_size = prev_stack_size;
         }
         compiler->vars.len = prev_vars_len;
+
+        next = expect_token(parser, "`elif`, `else` or `end`",
+                            MASK(TT_ELIF) | MASK(TT_ELSE) | MASK(TT_END));
+        if (parser->has_error)
+          return;
 
         if (next->id != TT_END) {
           if (end_label_index == (u32) -1)
@@ -1220,19 +1220,21 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
         if (parser->has_error)
           return;
 
-        if (end_label_index != (u32) -1)
-          fprintf(compiler->output_file, ".l%u\n", end_label_index);
-
-        next = expect_token(parser, "`end`", MASK(TT_END));
-        if (parser->has_error)
-          return;
-
         u32 diff = compiler->stack_size - prev_stack_size;
         if (diff > 0) {
           fprintf(compiler->output_file, "  add rsp,%u\n", diff);
           compiler->stack_size = prev_stack_size;
         }
         compiler->vars.len = prev_vars_len;
+
+        if (end_label_index != (u32) -1)
+          fprintf(compiler->output_file, ".l%u\n", end_label_index);
+
+        next = expect_token(parser, "`end`", MASK(TT_END));
+        if (parser->has_error)
+          return;
+      } else if (end_label_index != (u32) -1) {
+        fprintf(compiler->output_file, ".l%u\n", end_label_index);
       }
     } else if (token->id == TT_WHILE) {
       u32 begin_label_index = compiler->labels_count++;
@@ -1438,7 +1440,7 @@ bool compile(Str code, Str file_path, FILE *output_file) {
   fprintf(output_file, "  call $main\n");
   fprintf(output_file, "  mov rdi,rax\n");
   fprintf(output_file, "  mov rax,60\n");
-  fprintf(output_file, "  syscall\n");
+  fprintf(output_file, "  syscall\n\n");
 
   Token *token = NULL;
   while ((token = peek_token(&parser))) {
@@ -1501,7 +1503,7 @@ bool compile(Str code, Str file_path, FILE *output_file) {
 
       fprintf(output_file, ".end:\n");
       fprintf(output_file, "  leave\n");
-      fprintf(output_file, "  ret\n");
+      fprintf(output_file, "  ret\n\n");
 
       expect_token(&parser, "`end`", MASK(TT_END));
       if (parser.has_error) {
@@ -1523,7 +1525,7 @@ bool compile(Str code, Str file_path, FILE *output_file) {
 
       DA_APPEND(compiler.procs, new_proc);
 
-      fprintf(output_file, "extern $"STR_FMT"\n", STR_ARG(new_proc.name));
+      fprintf(output_file, "extern $"STR_FMT"\n\n", STR_ARG(new_proc.name));
     } else if (token->id == TT_LET) {
       Token *name = expect_token(&parser, "identifier", MASK(TT_IDENT));
       if (parser.has_error) {
