@@ -1,6 +1,7 @@
 whitespace=( |\t|\r)*
 newline=\n
-comment=#
+slcomment=#
+mlcomment=##
 
 proc=proc
 end=end
