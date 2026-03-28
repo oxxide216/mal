@@ -379,6 +379,7 @@ static Type *_compile_primary_expr(Parser *parser, Compiler *compiler) {
     return type;
   } else if (token->id == TT_CHAR) {
     Type *type = type_new(TypeKindS8, NULL);
+    Type *stack_type = type_new(TypeKindS16, NULL);
 
     char ch = token->lexeme.ptr[1];
     if (ch == '\\') {
@@ -394,9 +395,11 @@ static Type *_compile_primary_expr(Parser *parser, Compiler *compiler) {
       }
     }
 
-    char *loc = get_loc(type, LocKindFirst);
+    char *loc = get_loc(stack_type, LocKindFirst);
     fprintf(compiler->output_file, "  mov %s,%u\n", loc, ch);
-    push(compiler->output_file, type, LocKindFirst);
+    fprintf(compiler->output_file, "  push %s\n", loc);
+
+    type_free(stack_type);
 
     return type;
   } else if (token->id == TT_IDENT) {
@@ -489,6 +492,9 @@ static Type *compile_primary_expr(Parser *parser, Compiler *compiler) {
                  new_type->kind == TypeKindS64) {
         pop(compiler->output_file, type, LocKindFirst);
         fprintf(compiler->output_file, "  movsxd %s,%s\n", loc1, loc0);
+        push(compiler->output_file, new_type, LocKindFirst);
+      } else if (type_get_size(type) != type_get_size(new_type)) {
+        pop(compiler->output_file, type, LocKindFirst);
         push(compiler->output_file, new_type, LocKindFirst);
       }
 
@@ -1037,6 +1043,8 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
           return;
 
         char *loc = get_loc(type, LocKindSecond);
+
+        pop(compiler->output_file, type, LocKindSecond);
 
         fprintf(compiler->output_file, "  mov rax,");
         print_var_loc(compiler->output_file, var);
