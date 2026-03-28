@@ -26,11 +26,34 @@ bool lex(Tokens *tokens, Str code, Str file_path, StringBuilder *temp_sb) {
       continue;
     }
 
-    if (id == TT_COMMENT) {
+    if (id == TT_SLCOMMENT) {
       u32 next_len;
       wchar next;
 
       while ((next = get_next_wchar(code, 0, &next_len)) != U'\0' && next != U'\n') {
+        code.ptr += next_len;
+        code.len -= next_len;
+      }
+
+      continue;
+    }
+
+    if (id == TT_MLCOMMENT) {
+      u32 next_len;
+      wchar next;
+      bool prev_is_comment = false;
+
+      while ((next = get_next_wchar(code, 0, &next_len)) != U'\0' &&
+             (next != U'#' || !prev_is_comment)) {
+        prev_is_comment = next == U'#';
+
+        if (next == U'\n') {
+          ++current_row;
+          current_col = 0;
+        } else {
+          ++current_col;
+        }
+
         code.ptr += next_len;
         code.len -= next_len;
       }

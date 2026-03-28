@@ -10,8 +10,7 @@
 
 #define MASK(id) (1lu << (id))
 
-#define STACK_FRAME_BEGIN_SIZE     16
-#define CALLEE_PRESERVED_REGS_SIZE 40
+#define STACK_FRAME_BEGIN_SIZE 16
 
 typedef struct {
   Str    code;
@@ -70,14 +69,10 @@ typedef struct {
 } Compiler;
 
 typedef enum {
-  DestReturn = 0,
-  DestTemp0,
-  DestTemp1,
-  DestTemp2,
-  DestTemp3,
-  DestTemp4,
-  DestRem,
-} Dest;
+  LocKindFirst = 0,
+  LocKindSecond,
+  LocKindRem,
+} LocKind;
 
 static Token *peek_token(Parser *parser) {
   if (parser->pos >= parser->tokens.len)
@@ -103,75 +98,6 @@ static Token *expect_token(Parser *parser, char *expected, u64 id_mask) {
          STR_ARG(token->file_path),
          token->row + 1, token->col + 1,
          expected, STR_ARG(token->lexeme));
-
-  return NULL;
-}
-
-static char *get_dest_loc(Dest dest, Type *type) {
-  if (dest == DestReturn) {
-    switch (type->kind) {
-    case TypeKindUnit: return NULL;
-    case TypeKindS8:   return "al";
-    case TypeKindS16:  return "ax";
-    case TypeKindS32:  return "eax";
-    case TypeKindS64:  return "rax";
-    case TypeKindPtr:  return "rax";
-    }
-  } else if (dest == DestTemp0) {
-    switch (type->kind) {
-    case TypeKindUnit: return NULL;
-    case TypeKindS8:   return "bl";
-    case TypeKindS16:  return "bx";
-    case TypeKindS32:  return "ebx";
-    case TypeKindS64:  return "rbx";
-    case TypeKindPtr:  return "rbx";
-    }
-  } else if (dest == DestTemp1) {
-    switch (type->kind) {
-    case TypeKindUnit: return NULL;
-    case TypeKindS8:   return "r12b";
-    case TypeKindS16:  return "r12w";
-    case TypeKindS32:  return "r12d";
-    case TypeKindS64:  return "r12";
-    case TypeKindPtr:  return "r12";
-    }
-  } else if (dest == DestTemp2) {
-    switch (type->kind) {
-    case TypeKindUnit: return NULL;
-    case TypeKindS8:   return "r13b";
-    case TypeKindS16:  return "r13w";
-    case TypeKindS32:  return "r13d";
-    case TypeKindS64:  return "r13";
-    case TypeKindPtr:  return "r13";
-    }
-  } else if (dest == DestTemp3) {
-    switch (type->kind) {
-    case TypeKindUnit: return NULL;
-    case TypeKindS8:   return "r14b";
-    case TypeKindS16:  return "r14w";
-    case TypeKindS32:  return "r14d";
-    case TypeKindS64:  return "r14";
-    case TypeKindPtr:  return "r14";
-    }
-  } else if (dest == DestTemp4) {
-    switch (type->kind) {
-    case TypeKindUnit: return NULL;
-    case TypeKindS8:   return "r15b";
-    case TypeKindS16:  return "r15w";
-    case TypeKindS32:  return "r15d";
-    case TypeKindS64:  return "r15";
-    case TypeKindPtr:  return "r15";
-    }
-  } else if (dest == DestRem) {
-    switch (type->kind) {
-    case TypeKindUnit: return NULL;
-    case TypeKindS8:   return "dl";
-    case TypeKindS16:  return "dx";
-    case TypeKindS32:  return "edx";
-    case TypeKindS64:  return "rdx";
-    case TypeKindPtr:  return "rdx";
-    }
-  }
 
   return NULL;
 }
@@ -206,7 +132,7 @@ static Type *compile_type(Parser *parser, Compiler *compiler) {
   return NULL;
 }
 
-static Type *compile_expr(Parser *parser, Compiler *compiler, Dest dest);
+static Type *compile_expr(Parser *parser, Compiler *compiler);
 
 static Type *compile_proc_call(Parser *parser, Compiler *compiler, Token *name) {
   Types param_types = {0};
@@ -225,14 +151,11 @@ static Type *compile_proc_call(Parser *parser, Compiler *compiler, Token *name) 
         return NULL;
     }
 
-    Type *type = compile_expr(parser, compiler, DestTemp0);
+    Type *type = compile_expr(parser, compiler);
     if (parser->has_error)
       return NULL;
 
     Type *stack_type = get_type_on_stack(type);
-
-    char *loc = get_dest_loc(DestTemp0, stack_type);
-    fprintf(compiler->output_file, "  push %s\n", loc);
 
     token = peek_token(parser);
     DA_APPEND(param_types, type);
@@ -331,14 +254,61 @@ static void print_var_loc(FILE *output_file, Var *var) {
   else if (var->is_global)
     fprintf(output_file, "[$"STR_FMT"]", STR_ARG(var->name));
   else
-    fprintf(output_file, "[rbp-%u]", var->offset + CALLEE_PRESERVED_REGS_SIZE);
+    fprintf(output_file, "[rbp-%u]", var->offset);
 }
 
-static Type *compile_cmp_expr(Parser *parser, Compiler *compiler,
-                              Dest dest, u32 label_index,
-                              bool *found_comparison);
+static char *get_loc(Type *type, LocKind loc_kind) {
+  if (loc_kind == LocKindFirst) {
+    switch (type->kind) {
+      case TypeKindUnit: return NULL;
+      case TypeKindS8:   return "al";
+      case TypeKindS16:  return "ax";
+      case TypeKindS32:  return "eax";
+      case TypeKindS64:  return "rax";
+      case TypeKindPtr:  return "rax";
+    }
+  } else if (loc_kind == LocKindSecond) {
+    switch (type->kind) {
+      case TypeKindUnit: return NULL;
+      case TypeKindS8:   return "bl";
+      case TypeKindS16:  return "bx";
+      case TypeKindS32:  return "ebx";
+      case TypeKindS64:  return "rbx";
+      case TypeKindPtr:  return "rbx";
+    }
+  } else if (loc_kind == LocKindRem) {
+    switch (type->kind) {
+      case TypeKindUnit: return NULL;
+      case TypeKindS8:   return "dl";
+      case TypeKindS16:  return "dx";
+      case TypeKindS32:  return "edx";
+      case TypeKindS64:  return "rdx";
+      case TypeKindPtr:  return "rdx";
+    }
+  }
 
-static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest) {
+  return NULL;
+}
+
+static void push(FILE *output_file, Type *type, LocKind loc_kind) {
+  Type *stack_type = get_type_on_stack(type);
+
+  char *loc = get_loc(stack_type, loc_kind);
+  fprintf(output_file, "  push %s\n", loc);
+
+  type_free(stack_type);
+}
+
+static void pop(FILE *output_file, Type *type, LocKind loc_kind) {
+  Type *stack_type = get_type_on_stack(type);
+
+  char *loc = get_loc(stack_type, loc_kind);
+  fprintf(output_file, "  pop %s\n", loc);
+
+  type_free(stack_type);
+}
+
+static Type *_compile_primary_expr(Parser *parser, Compiler *compiler) {
   Token *token = peek_token(parser);
   if (token->id == TT_AMP || token->id == TT_STAR) {
     next_token(parser);
@@ -352,14 +322,15 @@ static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest
 
       Type *ptr_type = type_new(TypeKindPtr, type_clone(var->type));
 
-      char *loc = get_dest_loc(dest, ptr_type);
+      char *loc = get_loc(ptr_type, LocKindFirst);
       fprintf(compiler->output_file, "  lea %s,", loc);
       print_var_loc(compiler->output_file, var);
       fprintf(compiler->output_file, "\n");
+      push(compiler->output_file, ptr_type, LocKindFirst);
 
       return ptr_type;
     } else if (token->id == TT_STAR) {
-      Type *type = _compile_primary_expr(parser, compiler, dest);
+      Type *type = _compile_primary_expr(parser, compiler);
       if (parser->has_error)
         return NULL;
 
@@ -372,9 +343,11 @@ static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest
         return NULL;
       }
 
-      char *loc0 = get_dest_loc(dest, type);
-      char *loc1 = get_dest_loc(dest, type->target);
+      pop(compiler->output_file, type, LocKindSecond);
+      char *loc0 = get_loc(type, LocKindSecond);
+      char *loc1 = get_loc(type->target, LocKindFirst);
       fprintf(compiler->output_file, "  mov %s,[%s]\n", loc1, loc0);
+      push(compiler->output_file, type->target, LocKindFirst);
 
       return type_clone(type->target);
     }
@@ -390,14 +363,16 @@ static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest
 
   if (token->id == TT_INT) {
     Type *type = type_new(TypeKindS64, NULL);
-    char *loc = get_dest_loc(dest, type);
+    char *loc = get_loc(type, LocKindFirst);
     fprintf(compiler->output_file, "  mov %s,"STR_FMT"\n", loc, STR_ARG(token->lexeme));
+    fprintf(compiler->output_file, "  push %s\n", loc);
 
     return type;
   } else if (token->id == TT_STR) {
     Type *type = type_new(TypeKindPtr, type_new(TypeKindS8, NULL));
-    char *loc = get_dest_loc(dest, type);
+    char *loc = get_loc(type, LocKindFirst);
     fprintf(compiler->output_file, "  lea %s,[str@%u]\n", loc, compiler->strs.len);
+    fprintf(compiler->output_file, "  push %s\n", loc);
 
     DA_APPEND(compiler->strs, token->lexeme);
 
@@ -419,8 +394,9 @@ static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest
       }
     }
 
-    char *loc = get_dest_loc(dest, type);
+    char *loc = get_loc(type, LocKindFirst);
     fprintf(compiler->output_file, "  mov %s,%u\n", loc, ch);
+    push(compiler->output_file, type, LocKindFirst);
 
     return type;
   } else if (token->id == TT_IDENT) {
@@ -432,10 +408,7 @@ static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest
       if (parser->has_error)
         return NULL;
 
-      char *loc0 = get_dest_loc(DestReturn, type);
-      char *loc1 = get_dest_loc(dest, type);
-      if (dest != DestReturn)
-        fprintf(compiler->output_file, "  mov %s,%s\n", loc1, loc0);
+      push(compiler->output_file, type, LocKindFirst);
 
       return type;
     } else {
@@ -443,15 +416,16 @@ static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest
       if (parser->has_error)
         return NULL;
 
-      char *loc = get_dest_loc(dest, var->type);
+      char *loc = get_loc(var->type, LocKindFirst);
       fprintf(compiler->output_file, "  mov %s,", loc);
       print_var_loc(compiler->output_file, var);
       fprintf(compiler->output_file, "\n");
+      push(compiler->output_file, var->type, LocKindFirst);
 
       return type_clone(var->type);
     }
   } else if (token->id == TT_OPAREN) {
-    Type *type = compile_cmp_expr(parser, compiler, dest, (u32) -1, NULL);
+    Type *type = compile_expr(parser, compiler);
     if (parser->has_error)
       return NULL;
 
@@ -467,8 +441,9 @@ static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest
 
     u64 size = type_get_size(target);
     Type *type = type_new(TypeKindS64, NULL);
-    char *loc = get_dest_loc(dest, type);
+    char *loc = get_loc(type, LocKindFirst);
     fprintf(compiler->output_file, "  mov %s,%lu\n", loc, size);
+    fprintf(compiler->output_file, "  push %s\n", loc);
 
     return type;
   }
@@ -476,8 +451,8 @@ static Type *_compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest
   return NULL;
 }
 
-static Type *compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest) {
-  Type *type = _compile_primary_expr(parser, compiler, dest);
+static Type *compile_primary_expr(Parser *parser, Compiler *compiler) {
+  Type *type = _compile_primary_expr(parser, compiler);
   if (parser->has_error)
     return NULL;
 
@@ -502,20 +477,25 @@ static Type *compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest)
         return NULL;
       }
 
-      char *loc0 = get_dest_loc(dest, type);
-      char *loc1 = get_dest_loc(dest, new_type);
+      char *loc0 = get_loc(type, LocKindFirst);
+      char *loc1 = get_loc(new_type, LocKindFirst);
 
       if (type->kind == TypeKindS8 &&
-          new_type->kind == TypeKindS32)
+          new_type->kind == TypeKindS32) {
+        pop(compiler->output_file, type, LocKindFirst);
         fprintf(compiler->output_file, "  movsx %s,%s\n", loc1, loc0);
-      if (type->kind == TypeKindS32 &&
-          new_type->kind == TypeKindS64)
+        push(compiler->output_file, new_type, LocKindFirst);
+      } else if (type->kind == TypeKindS32 &&
+                 new_type->kind == TypeKindS64) {
+        pop(compiler->output_file, type, LocKindFirst);
         fprintf(compiler->output_file, "  movsxd %s,%s\n", loc1, loc0);
+        push(compiler->output_file, new_type, LocKindFirst);
+      }
 
       type_free(type);
       type = new_type;
     } else if (token->id == TT_OBRACKET) {
-      Type *index = compile_cmp_expr(parser, compiler, DestReturn, (u32) -1, NULL);
+      Type *index = compile_expr(parser, compiler);
       if (parser->has_error)
         return NULL;
 
@@ -541,13 +521,17 @@ static Type *compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest)
         return NULL;
       }
 
-      char *loc0 = get_dest_loc(dest, type);
-      char *loc1 = get_dest_loc(dest, type->target);
-      char *loc2 = get_dest_loc(DestReturn, type);
+      char *loc0 = get_loc(type->target, LocKindFirst);
+      char *loc1 = get_loc(type, LocKindFirst);
+      char *loc2 = get_loc(index, LocKindSecond);
       u32 target_size = type_get_size(type->target);
 
+      pop(compiler->output_file, index, LocKindSecond);
+      pop(compiler->output_file, type, LocKindFirst);
+
       fprintf(compiler->output_file, "  mov %s,[%s+%s*%u]\n",
-              loc1, loc0, loc2, target_size);
+              loc0, loc1, loc2, target_size);
+      push(compiler->output_file, type->target, LocKindFirst);
 
       Type *target = type_clone(type->target);
       type_free(type);
@@ -561,8 +545,8 @@ static Type *compile_primary_expr(Parser *parser, Compiler *compiler, Dest dest)
 }
 
 // mul, div, mod
-static Type *compile_mul_expr(Parser *parser, Compiler *compiler, Dest dest) {
-  Type *lhs = compile_primary_expr(parser, compiler, dest);
+static Type *compile_mul_expr(Parser *parser, Compiler *compiler) {
+  Type *lhs = compile_primary_expr(parser, compiler);
   if (parser->has_error)
     return NULL;
 
@@ -573,7 +557,7 @@ static Type *compile_mul_expr(Parser *parser, Compiler *compiler, Dest dest) {
   while (token->id == TT_STAR || token->id == TT_SLASH || token->id == TT_PERC) {
     next_token(parser);
 
-    Type *rhs = compile_primary_expr(parser, compiler, DestTemp2);
+    Type *rhs = compile_primary_expr(parser, compiler);
     if (parser->has_error)
       return NULL;
 
@@ -594,21 +578,18 @@ static Type *compile_mul_expr(Parser *parser, Compiler *compiler, Dest dest) {
       return NULL;
     }
 
-    char *loc0 = get_dest_loc(dest, lhs);
-    char *loc1 = get_dest_loc(DestTemp2, rhs);
-    char *loc2 = get_dest_loc(DestReturn, lhs);
-    char *loc3 = get_dest_loc(DestRem, lhs);
+    char *loc = get_loc(rhs, LocKindSecond);
+
+    pop(compiler->output_file, rhs, LocKindSecond);
+    pop(compiler->output_file, lhs, LocKindFirst);
 
     type_free(rhs);
 
-    if (dest != DestReturn)
-      fprintf(compiler->output_file, "  mov %s,%s\n", loc2, loc0);
-
     if (token->id == TT_STAR) {
       if (type_is_signed(lhs))
-        fprintf(compiler->output_file, "  imul %s\n", loc1);
+        fprintf(compiler->output_file, "  imul %s\n", loc);
       else
-        fprintf(compiler->output_file, "  mul %s\n", loc1);
+        fprintf(compiler->output_file, "  mul %s\n", loc);
     } else {
       switch (lhs->kind) {
       case TypeKindS16: fprintf(compiler->output_file, "  cwd\n"); break;
@@ -618,15 +599,15 @@ static Type *compile_mul_expr(Parser *parser, Compiler *compiler, Dest dest) {
       }
 
       if (type_is_signed(lhs))
-        fprintf(compiler->output_file, "  idiv %s\n", loc1);
+        fprintf(compiler->output_file, "  idiv %s\n", loc);
       else
-        fprintf(compiler->output_file, "  div %s\n", loc1);
+        fprintf(compiler->output_file, "  div %s\n", loc);
     }
 
     if (token->id == TT_PERC)
-      fprintf(compiler->output_file, "  mov %s,%s\n", loc0, loc3);
-    else if (dest != DestReturn)
-      fprintf(compiler->output_file, "  mov %s,%s\n", loc0, loc2);
+      push(compiler->output_file, lhs, LocKindRem);
+    else
+      push(compiler->output_file, lhs, LocKindFirst);
 
     token = peek_token(parser);
     if (!token)
@@ -637,8 +618,8 @@ static Type *compile_mul_expr(Parser *parser, Compiler *compiler, Dest dest) {
 }
 
 // add, sub
-static Type *compile_add_expr(Parser *parser, Compiler *compiler, Dest dest) {
-  Type *lhs = compile_mul_expr(parser, compiler, dest);
+static Type *compile_add_expr(Parser *parser, Compiler *compiler) {
+  Type *lhs = compile_mul_expr(parser, compiler);
   if (parser->has_error)
     return NULL;
 
@@ -649,7 +630,7 @@ static Type *compile_add_expr(Parser *parser, Compiler *compiler, Dest dest) {
   while (token->id == TT_PLUS || token->id == TT_MINUS) {
     next_token(parser);
 
-    Type *rhs = compile_mul_expr(parser, compiler, DestTemp1);
+    Type *rhs = compile_mul_expr(parser, compiler);
     if (parser->has_error)
       return NULL;
 
@@ -668,28 +649,33 @@ static Type *compile_add_expr(Parser *parser, Compiler *compiler, Dest dest) {
       return NULL;
     }
 
-    char *loc0 = get_dest_loc(dest, lhs);
-    char *loc1 = get_dest_loc(DestTemp1, rhs);
-    char *loc2 = get_dest_loc(DestReturn, rhs);
+    char *loc0 = get_loc(lhs, LocKindSecond);
+    char *loc1 = get_loc(rhs, LocKindFirst);
+    char *loc2 = get_loc(rhs, LocKindRem);
     u32 target_size = 0;
     if (lhs->kind == TypeKindPtr)
       target_size = type_get_size(lhs->target);
 
+    pop(compiler->output_file, rhs, LocKindFirst);
+    pop(compiler->output_file, lhs, LocKindSecond);
+
     type_free(rhs);
 
-    if (target_size <= 0) {
+    if (target_size == 0) {
       if (token->id == TT_PLUS)
         fprintf(compiler->output_file, "  add %s,%s\n", loc0, loc1);
       else
         fprintf(compiler->output_file, "  sub %s,%s\n", loc0, loc1);
     } else {
       fprintf(compiler->output_file, "  mov %s,%u\n", loc2, target_size);
-      fprintf(compiler->output_file, "  mul %s\n", loc1);
+      fprintf(compiler->output_file, "  mul %s\n", loc2);
       if (token->id == TT_PLUS)
-        fprintf(compiler->output_file, "  add %s,%s\n", loc0, loc2);
+        fprintf(compiler->output_file, "  add %s,%s\n", loc0, loc1);
       else
-        fprintf(compiler->output_file, "  sub %s,%s\n", loc0, loc2);
+        fprintf(compiler->output_file, "  sub %s,%s\n", loc0, loc1);
     }
+
+    push(compiler->output_file, lhs, LocKindSecond);
 
     token = peek_token(parser);
     if (!token)
@@ -700,8 +686,8 @@ static Type *compile_add_expr(Parser *parser, Compiler *compiler, Dest dest) {
 }
 
 // |, &. ^
-static Type *compile_bit_expr(Parser *parser, Compiler *compiler, Dest dest) {
-  Type *lhs = compile_add_expr(parser, compiler, dest);
+static Type *compile_bit_expr(Parser *parser, Compiler *compiler) {
+  Type *lhs = compile_add_expr(parser, compiler);
   if (parser->has_error)
     return NULL;
 
@@ -712,7 +698,7 @@ static Type *compile_bit_expr(Parser *parser, Compiler *compiler, Dest dest) {
   while (token->id == TT_OR || token->id == TT_AMP || token->id == TT_XOR) {
     next_token(parser);
 
-    Type *rhs = compile_add_expr(parser, compiler, DestTemp4);
+    Type *rhs = compile_add_expr(parser, compiler);
     if (parser->has_error)
       return NULL;
 
@@ -733,8 +719,11 @@ static Type *compile_bit_expr(Parser *parser, Compiler *compiler, Dest dest) {
       return NULL;
     }
 
-    char *loc0 = get_dest_loc(dest, lhs);
-    char *loc1 = get_dest_loc(DestTemp4, rhs);
+    char *loc0 = get_loc(lhs, LocKindFirst);
+    char *loc1 = get_loc(rhs, LocKindSecond);
+
+    pop(compiler->output_file, rhs, LocKindSecond);
+    pop(compiler->output_file, lhs, LocKindFirst);
 
     type_free(rhs);
 
@@ -744,6 +733,8 @@ static Type *compile_bit_expr(Parser *parser, Compiler *compiler, Dest dest) {
       fprintf(compiler->output_file, "  and %s,%s\n", loc0, loc1);
     else
       fprintf(compiler->output_file, "  xor %s,%s\n", loc0, loc1);
+
+    push(compiler->output_file, lhs, LocKindFirst);
 
     token = peek_token(parser);
     if (!token)
@@ -755,9 +746,8 @@ static Type *compile_bit_expr(Parser *parser, Compiler *compiler, Dest dest) {
 
 // ==, !=, <, >, <=, >=
 static Type *compile_cmp_expr(Parser *parser, Compiler *compiler,
-                              Dest dest, u32 label_index,
-                              bool *found_comparison) {
-  Type *lhs = compile_bit_expr(parser, compiler, dest);
+                              u32 label_index, bool *found_comparison) {
+  Type *lhs = compile_bit_expr(parser, compiler);
   if (parser->has_error)
     return NULL;
 
@@ -776,7 +766,7 @@ static Type *compile_cmp_expr(Parser *parser, Compiler *compiler,
     if (found_comparison)
       *found_comparison = true;
 
-    Type *rhs = compile_bit_expr(parser, compiler, DestTemp3);
+    Type *rhs = compile_bit_expr(parser, compiler);
     if (parser->has_error)
       return NULL;
 
@@ -811,23 +801,26 @@ static Type *compile_cmp_expr(Parser *parser, Compiler *compiler,
     if (temp_rhs->kind == TypeKindS8)
       temp_rhs = type_new(TypeKindS16, NULL);
 
-    char *loc0 = get_dest_loc(dest, temp_lhs);
-    char *loc1 = get_dest_loc(DestTemp3, temp_rhs);
-    char *loc2 = get_dest_loc(DestReturn, temp_lhs);
+    char *loc0 = get_loc(temp_lhs, LocKindFirst);
+    char *loc1 = get_loc(temp_rhs, LocKindSecond);
+    char *loc2 = get_loc(temp_lhs, LocKindRem);
+
+    pop(compiler->output_file, rhs, LocKindSecond);
+    pop(compiler->output_file, lhs, LocKindFirst);
 
     if (lhs->kind == TypeKindS8) {
-      char *temp_loc0 = get_dest_loc(dest, lhs);
+      char *temp_loc0 = get_loc(lhs, LocKindFirst);
       fprintf(compiler->output_file, "  movzx %s,%s\n", loc0, temp_loc0);
       type_free(temp_lhs);
     }
 
     if (rhs->kind == TypeKindS8) {
-      char *temp_loc1 = get_dest_loc(DestTemp3, rhs);
-      char *temp_loc2 = get_dest_loc(DestReturn, rhs);
+      char *temp_loc1 = get_loc(rhs, LocKindSecond);
       fprintf(compiler->output_file, "  movzx %s,%s\n", loc1, temp_loc1);
-      fprintf(compiler->output_file, "  movzx %s,%s\n", loc2, temp_loc2);
       type_free(temp_rhs);
     }
+
+    type_free(rhs);
 
     fprintf(compiler->output_file, "  cmp %s,%s\n", loc0, loc1);
 
@@ -889,9 +882,9 @@ static Type *compile_cmp_expr(Parser *parser, Compiler *compiler,
         else if (token->id == TT_GE)
           fprintf(compiler->output_file, "  cmovae %s,%s\n", loc0, loc2);
       }
-    }
 
-    type_free(rhs);
+      push(compiler->output_file, result, LocKindFirst);
+    }
 
     token = peek_token(parser);
     if (!token)
@@ -906,23 +899,8 @@ static Type *compile_cmp_expr(Parser *parser, Compiler *compiler,
   return lhs;
 }
 
-static Type *compile_expr(Parser *parser, Compiler *compiler, Dest dest) {
-  bool was_return = dest == DestReturn;
-
-  if (was_return)
-    dest = DestTemp0;
-
-  Type *type = compile_cmp_expr(parser, compiler, dest, (u32) -1, NULL);
-  if (parser->has_error)
-    return NULL;
-
-  if (was_return) {
-    char *loc0 = get_dest_loc(dest, type);
-    char *loc1 = get_dest_loc(DestReturn, type);
-    fprintf(compiler->output_file, "  mov %s,%s\n", loc1, loc0);
-  }
-
-  return type;
+static Type *compile_expr(Parser *parser, Compiler *compiler) {
+  return compile_cmp_expr(parser, compiler, (u32) -1, NULL);
 }
 
 static void compile_instrs(Parser *parser, Compiler *compiler) {
@@ -947,17 +925,12 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
       if (parser->has_error)
         return;
 
-      Type *type = compile_expr(parser, compiler, DestTemp0);
+      Type *type = compile_expr(parser, compiler);
       if (parser->has_error)
         return;
 
       Type *stack_type = get_type_on_stack(type);
-
-      char *loc = get_dest_loc(DestTemp0, stack_type);
-      fprintf(compiler->output_file, "  push %s\n", loc);
-
       compiler->stack_size += type_get_size(stack_type);
-
       type_free(stack_type);
 
       Var new_var = {
@@ -971,7 +944,7 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
     } else if (token->id == TT_RET) {
       fprintf(compiler->output_file, "  jmp .end\n");
     } else if (token->id == TT_RETVAL) {
-      Type *type = compile_expr(parser, compiler, DestReturn);
+      Type *type = compile_expr(parser, compiler);
       if (parser->has_error)
         return;
 
@@ -984,6 +957,8 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
         fprintf(stderr, "\n");
         return;
       }
+
+      pop(compiler->output_file, type, LocKindFirst);
 
       type_free(type);
 
@@ -1022,19 +997,20 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
           return;
         }
 
-        Type *type = compile_expr(parser, compiler, DestTemp0);
+        Type *type = compile_expr(parser, compiler);
         if (parser->has_error)
           return;
 
-        Type *stack_type = get_type_on_stack(type);
 
-        char *loc = get_dest_loc(DestTemp0, stack_type);
+        char *loc = get_loc(type, LocKindFirst);
+
+        pop(compiler->output_file, type, LocKindFirst);
+
+        type_free(type);
+
         fprintf(compiler->output_file, "  mov ");
         print_var_loc(compiler->output_file, var);
         fprintf(compiler->output_file, ",%s\n", loc);
-
-        type_free(type);
-        type_free(stack_type);
       } else if (next->id == TT_OPAREN) {
         Type *type = compile_proc_call(parser, compiler, token);
         if (parser->has_error)
@@ -1056,23 +1032,18 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
           return;
         }
 
-        Type *type = compile_expr(parser, compiler, DestTemp0);
+        Type *type = compile_expr(parser, compiler);
         if (parser->has_error)
           return;
 
-        Type *stack_type = get_type_on_stack(type);
-
-        char *loc = get_dest_loc(DestTemp0, stack_type);
-
-        type_free(stack_type);
+        char *loc = get_loc(type, LocKindSecond);
 
         fprintf(compiler->output_file, "  mov rax,");
         print_var_loc(compiler->output_file, var);
         fprintf(compiler->output_file, "\n");
         fprintf(compiler->output_file, "  mov [rax],%s\n", loc);
       } else if (next->id == TT_OBRACKET) {
-        Type *index = compile_cmp_expr(parser, compiler, DestReturn,
-                                     (u32) -1, NULL);
+        Type *index = compile_expr(parser, compiler);
         if (parser->has_error)
           return;
 
@@ -1084,7 +1055,7 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
         if (parser->has_error)
           return;
 
-        Type *type = compile_expr(parser, compiler, DestTemp0);
+        Type *type = compile_expr(parser, compiler);
         if (parser->has_error)
           return;
 
@@ -1110,10 +1081,13 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
           return;
         }
 
-        char *loc0 = get_dest_loc(DestTemp1, var->type);
-        char *loc1 = get_dest_loc(DestReturn, index);
-        char *loc2 = get_dest_loc(DestTemp0, type);
+        char *loc0 = get_loc(var->type, LocKindRem);
+        char *loc1 = get_loc(index, LocKindFirst);
+        char *loc2 = get_loc(type, LocKindSecond);
         u32 target_size = type_get_size(type);
+
+        pop(compiler->output_file, type, LocKindSecond);
+        pop(compiler->output_file, index, LocKindFirst);
 
         fprintf(compiler->output_file, "  mov %s,", loc0);
         print_var_loc(compiler->output_file, var);
@@ -1153,18 +1127,23 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
     } else if (token->id == TT_IF) {
       u32 label_index = compiler->labels_count++;
       u32 end_label_index = (u32) -1;
+      u32 prev_stack_size = compiler->stack_size;
+      u32 prev_vars_len = compiler->vars.len;
       bool found_comparison = false;
 
-      Type *type = compile_cmp_expr(parser, compiler, DestTemp0,
-                                    label_index, &found_comparison);
+      Type *type = compile_cmp_expr(parser, compiler, label_index, &found_comparison);
       if (parser->has_error)
         return;
 
-      if (!found_comparison) {
-        char *loc = get_dest_loc(DestTemp0, type);
+      if (found_comparison) {
+        found_comparison = false;
+      } else {
+        char *loc = get_loc(type, LocKindFirst);
+
+        pop(compiler->output_file, type, LocKindFirst);
+
         fprintf(compiler->output_file, "  cmp %s,0\n", loc);
         fprintf(compiler->output_file, "  je .l%u\n", label_index);
-        found_comparison = false;
       }
 
       compile_instrs(parser, compiler);
@@ -1176,6 +1155,13 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
       if (parser->has_error)
         return;
 
+      u32 diff = compiler->stack_size - prev_stack_size;
+      if (diff > 0) {
+        fprintf(compiler->output_file, "  add rsp,%u\n", diff);
+        compiler->stack_size = prev_stack_size;
+      }
+      compiler->vars.len = prev_vars_len;
+
       if (next->id != TT_END) {
         end_label_index = compiler->labels_count++;
         fprintf(compiler->output_file, "  jmp .l%u\n", end_label_index);
@@ -1184,11 +1170,15 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
 
       while (next->id == TT_ELIF) {
         label_index = compiler->labels_count++;
-        type = compile_cmp_expr(parser, compiler, DestTemp0,
-                                label_index, &found_comparison);
+        type = compile_cmp_expr(parser, compiler, label_index, &found_comparison);
 
-        if (!found_comparison) {
-          char *loc = get_dest_loc(DestTemp0, type);
+        if (found_comparison) {
+          found_comparison = false;
+        } else {
+          char *loc = get_loc(type, LocKindFirst);
+
+          pop(compiler->output_file, type, LocKindFirst);
+
           fprintf(compiler->output_file, "  cmp %s,0\n", loc);
           fprintf(compiler->output_file, "  je .l%u\n", label_index);
         }
@@ -1201,6 +1191,13 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
                             MASK(TT_ELIF) | MASK(TT_ELSE) | MASK(TT_END));
         if (parser->has_error)
           return;
+
+        u32 diff = compiler->stack_size - prev_stack_size;
+        if (diff > 0) {
+          fprintf(compiler->output_file, "  add rsp,%u\n", diff);
+          compiler->stack_size = prev_stack_size;
+        }
+        compiler->vars.len = prev_vars_len;
 
         if (next->id != TT_END) {
           if (end_label_index == (u32) -1)
@@ -1221,22 +1218,32 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
         next = expect_token(parser, "`end`", MASK(TT_END));
         if (parser->has_error)
           return;
+
+        u32 diff = compiler->stack_size - prev_stack_size;
+        if (diff > 0) {
+          fprintf(compiler->output_file, "  add rsp,%u\n", diff);
+          compiler->stack_size = prev_stack_size;
+        }
+        compiler->vars.len = prev_vars_len;
       }
     } else if (token->id == TT_WHILE) {
       u32 begin_label_index = compiler->labels_count++;
       u32 end_label_index = compiler->labels_count++;
       u32 prev_stack_size = compiler->stack_size;
+      u32 prev_vars_len = compiler->vars.len;
       bool found_comparison = false;
 
       fprintf(compiler->output_file, ".l%u\n", begin_label_index);
 
-      Type *type = compile_cmp_expr(parser, compiler, DestTemp0,
-                                    end_label_index, &found_comparison);
+      Type *type = compile_cmp_expr(parser, compiler, end_label_index, &found_comparison);
       if (parser->has_error)
         return;
 
       if (!found_comparison) {
-        char *loc = get_dest_loc(DestTemp0, type);
+        char *loc = get_loc(type, LocKindFirst);
+
+        pop(compiler->output_file, type, LocKindFirst);
+
         fprintf(compiler->output_file, "  cmp %s,0\n", loc);
         fprintf(compiler->output_file, "  je .l%u\n", end_label_index);
       }
@@ -1250,8 +1257,11 @@ static void compile_instrs(Parser *parser, Compiler *compiler) {
         return;
 
       u32 diff = compiler->stack_size - prev_stack_size;
-      if (diff > 0)
+      if (diff > 0) {
         fprintf(compiler->output_file, "  add rsp,%u\n", diff);
+        compiler->stack_size = prev_stack_size;
+      }
+      compiler->vars.len = prev_vars_len;
 
       fprintf(compiler->output_file, "  jmp .l%u\n", begin_label_index);
       fprintf(compiler->output_file, ".l%u\n", end_label_index);
@@ -1416,6 +1426,7 @@ bool compile(Str code, Str file_path, FILE *output_file) {
   fprintf(output_file, "  push rbx\n");
   fprintf(output_file, "  lea rbx,qword[rsp+16]\n");
   fprintf(output_file, "  push rbx\n");
+  fprintf(output_file, "  mov rax,0\n");
   fprintf(output_file, "  call $main\n");
   fprintf(output_file, "  mov rdi,rax\n");
   fprintf(output_file, "  mov rax,60\n");
@@ -1444,11 +1455,6 @@ bool compile(Str code, Str file_path, FILE *output_file) {
       fprintf(output_file, "$"STR_FMT":\n", STR_ARG(new_proc.name));
       fprintf(output_file, "  push rbp\n");
       fprintf(output_file, "  mov rbp,rsp\n");
-      fprintf(output_file, "  push rbx\n");
-      fprintf(output_file, "  push r12\n");
-      fprintf(output_file, "  push r13\n");
-      fprintf(output_file, "  push r14\n");
-      fprintf(output_file, "  push r15\n");
 
       compiler.stack_size = 0;
       compiler.labels_count = 0;
@@ -1486,11 +1492,6 @@ bool compile(Str code, Str file_path, FILE *output_file) {
       }
 
       fprintf(output_file, ".end:\n");
-      fprintf(output_file, "  pop r15\n");
-      fprintf(output_file, "  pop r14\n");
-      fprintf(output_file, "  pop r13\n");
-      fprintf(output_file, "  pop r12\n");
-      fprintf(output_file, "  pop rbx\n");
       fprintf(output_file, "  leave\n");
       fprintf(output_file, "  ret\n");
 
