@@ -72,6 +72,7 @@ typedef enum {
   LocKindFirst = 0,
   LocKindSecond,
   LocKindRem,
+  LocKindShifter,
 } LocKind;
 
 static Token *peek_token(Parser *parser) {
@@ -284,6 +285,15 @@ static char *get_loc(Type *type, LocKind loc_kind) {
       case TypeKindS32:  return "edx";
       case TypeKindS64:  return "rdx";
       case TypeKindPtr:  return "rdx";
+    }
+  } else if (loc_kind == LocKindShifter) {
+    switch (type->kind) {
+      case TypeKindUnit: return NULL;
+      case TypeKindS8:   return "cl";
+      case TypeKindS16:  return "cx";
+      case TypeKindS32:  return "ecx";
+      case TypeKindS64:  return "rcx";
+      case TypeKindPtr:  return "rcx";
     }
   }
 
@@ -783,17 +793,16 @@ static Type *compile_shift_expr(Parser *parser, Compiler *compiler) {
     }
 
     char *loc0 = get_loc(lhs, LocKindFirst);
-    char *loc1 = get_loc(rhs, LocKindSecond);
 
-    pop(compiler->output_file, rhs, LocKindSecond);
+    pop(compiler->output_file, rhs, LocKindShifter);
     pop(compiler->output_file, lhs, LocKindFirst);
 
     type_free(rhs);
 
     if (token->id == TT_LEFT)
-      fprintf(compiler->output_file, "  sal %s,%s\n", loc0, loc1);
+      fprintf(compiler->output_file, "  sal %s,cl\n", loc0);
     else
-      fprintf(compiler->output_file, "  sar %s,%s\n", loc0, loc1);
+      fprintf(compiler->output_file, "  sar %s,cl\n", loc0);
 
     push(compiler->output_file, lhs, LocKindFirst);
 
