@@ -33,5 +33,6 @@ bool type_is_int(Type *Type);
 bool types_can_add(Type *a, Type *b);
 bool types_can_mul(Type *a, Type *b);
 bool types_can_cast(Type *a, Type *b);
+bool types_can_shift(Type *a, Type *b);
 
 #endif // TYPE_H

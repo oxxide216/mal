@@ -80,3 +80,8 @@ bool types_can_mul(Type *a, Type *b) {
 bool types_can_cast(Type *a, Type *b) {
   return b->kind != TypeKindS64 || a->kind == TypeKindS32 || a->kind == TypeKindPtr;
 }
+
+bool types_can_shift(Type *a, Type *b) {
+  return a->kind >= TypeKindS8 && a->kind <= TypeKindS64 &&
+         a->kind == b->kind;
+}

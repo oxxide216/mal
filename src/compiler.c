@@ -750,10 +750,65 @@ static Type *compile_bit_expr(Parser *parser, Compiler *compiler) {
   return lhs;
 }
 
+// <<, >>
+static Type *compile_shift_expr(Parser *parser, Compiler *compiler) {
+  Type *lhs = compile_bit_expr(parser, compiler);
+  if (parser->has_error)
+    return NULL;
+
+  Token *token = peek_token(parser);
+  if (!token)
+    return lhs;
+
+  while (token->id == TT_LEFT || token->id == TT_RIGHT) {
+    next_token(parser);
+
+    Type *rhs = compile_bit_expr(parser, compiler);
+    if (parser->has_error)
+      return NULL;
+
+    if (!types_can_shift(lhs, rhs)) {
+      parser->has_error = true;
+      PERROR(STR_FMT":%u:%u: ", "Cannot do ",
+             STR_ARG(token->file_path),
+             token->row + 1, token->col + 1);
+      type_print(stderr, lhs);
+      if (token->id == TT_LEFT)
+        fprintf(stderr, " << ");
+      else
+        fprintf(stderr, " >> ");
+      type_print(stderr, rhs);
+      fprintf(stderr, "\n");
+      return NULL;
+    }
+
+    char *loc0 = get_loc(lhs, LocKindFirst);
+    char *loc1 = get_loc(rhs, LocKindSecond);
+
+    pop(compiler->output_file, rhs, LocKindSecond);
+    pop(compiler->output_file, lhs, LocKindFirst);
+
+    type_free(rhs);
+
+    if (token->id == TT_LEFT)
+      fprintf(compiler->output_file, "  sal %s,%s\n", loc0, loc1);
+    else
+      fprintf(compiler->output_file, "  sar %s,%s\n", loc0, loc1);
+
+    push(compiler->output_file, lhs, LocKindFirst);
+
+    token = peek_token(parser);
+    if (!token)
+      return lhs;
+  }
+
+  return lhs;
+}
+
 // ==, !=, <, >, <=, >=
 static Type *compile_cmp_expr(Parser *parser, Compiler *compiler,
                               u32 label_index, bool *found_comparison) {
-  Type *lhs = compile_bit_expr(parser, compiler);
+  Type *lhs = compile_shift_expr(parser, compiler);
   if (parser->has_error)
     return NULL;
 
@@ -772,7 +827,7 @@ static Type *compile_cmp_expr(Parser *parser, Compiler *compiler,
     if (found_comparison)
       *found_comparison = true;
 
-    Type *rhs = compile_bit_expr(parser, compiler);
+    Type *rhs = compile_shift_expr(parser, compiler);
     if (parser->has_error)
       return NULL;
 
