@@ -1,0 +1,340 @@
+include "../std/io.mal"
+
+let token_begins: &s64
+let token_ends: &s64
+let token_types: &s8
+let tokens_len: s64
+let tokens_cap: s64
+
+proc lerror(path: &s8, row: s64, col: s64, str: &s8)
+  let row_str = s64_to_str(row)
+  let col_str = s64_to_str(col)
+
+  fprint(2, path)
+  fprint(2, ":")
+  fprint(2, row_str)
+  fprint(2, ":")
+  fprint(2, col_str)
+  fprint(2, ": \e[31;1m[ERROR]\e[0m ")
+  fprint(2, str)
+
+  free(row_str)
+  free(col_str)
+end
+
+proc init_lexer()
+  tokens_len = 0
+  tokens_cap = 0
+end
+
+proc push_token(tbegin: s64, tend: s64, ttype: s8)
+  if tokens_cap <= tokens_len
+    if tokens_cap == 0
+      tokens_cap = 10
+      token_begins = malloc(tokens_cap * sizeof s64)
+      token_ends = malloc(tokens_cap * sizeof s64)
+      token_types = malloc(tokens_cap * sizeof s8)
+    else
+      tokens_cap = tokens_cap * 2
+      token_begins = realloc(token_begins as &s8, tokens_cap * sizeof s64)
+      token_ends = realloc(token_ends as &s8, tokens_cap * sizeof s64)
+      token_types = realloc(token_types, tokens_cap * sizeof s8)
+    end
+  end
+
+  token_begins[tokens_len] = tbegin
+  token_ends[tokens_len] = tend
+  token_types[tokens_len] = ttype
+  tokens_len = tokens_len + 1
+end
+
+proc is_space(char: s8) -> s8
+  retval (char == ' ') | (char == '\t') | (char == '\r')
+end
+
+proc is_alpha(char: s8) -> s8
+  retval ((char >= 'A') & (char <= 'Z')) | ((char >= 'a') & (char <= 'z'))
+end
+
+proc is_digit(char: s8) -> s8
+  retval (char >= '0') & (char <= '9')
+end
+
+proc get_ident_token_type(code: &s8, tbegin: s64, tend: s64) -> s8
+  if str_n_eq(code + tbegin, "proc", 4)
+    retval 64 as s8
+  elif str_n_eq(code + tbegin, "end", 3)
+    retval 65 as s8
+  elif str_n_eq(code + tbegin, "let", 3)
+    retval 66 as s8
+  elif str_n_eq(code + tbegin, "retval", 6)
+    retval 67 as s8
+  elif str_n_eq(code + tbegin, "ret", 3)
+    retval 68 as s8
+  elif str_n_eq(code + tbegin, "extern", 6)
+    retval 69 as s8
+  elif str_n_eq(code + tbegin, "as", 2)
+    retval 70 as s8
+  elif str_n_eq(code + tbegin, "if", 2)
+    retval 71 as s8
+  elif str_n_eq(code + tbegin, "elif", 4)
+    retval 72 as s8
+  elif str_n_eq(code + tbegin, "else", 4)
+    retval 73 as s8
+  elif str_n_eq(code + tbegin, "while", 5)
+    retval 74 as s8
+  elif str_n_eq(code + tbegin, "include", 7)
+    retval 75 as s8
+  elif str_n_eq(code + tbegin, "sizeof", 6)
+    retval 76 as s8
+  end
+
+  retval 0 as s8
+end
+
+proc lex(code: &s8, path: &s8)
+  let len = str_len(code)
+  let i = 0
+  let row = 1
+  let col = 1
+
+  while i < len
+    if is_space(code[i])
+      i = i + 1
+      col = col + 1
+    elif is_alpha(code[i]) | (code[i] == '_')
+      let tbegin = i
+
+      i = i + 1
+      col = col + 1
+
+      while is_alpha(code[i]) | is_digit(code[i]) | (code[i] == '_')
+        i = i + 1
+        col = col + 1
+      end
+
+      let ttype = get_ident_token_type(code, tbegin, i)
+
+      push_token(tbegin, i, ttype)
+    elif is_digit(code[i])
+      let tbegin = i
+
+      i = i + 1
+      col = col + 1
+
+      while is_digit(code[i])
+        i = i + 1
+        col = col + 1
+      end
+
+      push_token(tbegin, i, 1 as s8)
+    elif code[i] == '"'
+      let tbegin = i
+      let prow = row
+      let pcol = col
+      let is_escaped = 0 as s8
+
+      i = i + 1
+      col = col + 1
+
+      while (i < len) & ((code[i] != '"') | is_escaped)
+        if is_escaped
+          is_escaped = 0 as s8
+        elif code[i] == '\\'
+          is_escaped = 1 as s8
+        end
+
+        if code[i] == '\n'
+          row = row + 1
+          col = 1
+        else
+          col = col + 1
+        end
+
+        i = i + 1
+      end
+
+      if code[i] != '"'
+        lerror(path, prow, pcol, "String literal was not closed\n")
+        exit(1)
+      end
+
+      i = i + 1
+      col = col + 1
+
+      push_token(tbegin, i, 2 as s8)
+    elif code[i] == '''
+      let tbegin = i
+      let prow = row
+      let pcol = col
+
+      i = i + 1
+      col = col + 1
+
+      if (len - i < 2) | ((code[i] == '\\') & (len - i < 3))
+        lerror(path, prow, pcol, "Character literal was not closed\n")
+        exit(1)
+      end
+
+      if code[i] == '\\'
+        i = i + 1
+
+        col = col + 1
+        if code[i] == '\n'
+          row = row + 1
+          col = 1
+        else
+          col = col + 1
+        end
+
+        i = i + 1
+      else
+        if code[i] == '\n'
+          row = row + 1
+          col = 1
+        else
+          col = col + 1
+        end
+
+        i = i + 1
+      end
+
+      if (i >= len) | (code[i] != ''')
+        lerror(path, prow, pcol, "Character literal was not closed\n")
+        exit(1)
+      end
+
+      i = i + 1
+      col = col + 1
+
+      push_token(tbegin, i, 3 as s8)
+    elif code[i] == '('
+      push_token(i, i + 1, 4 as s8)
+      i = i + 1
+      col = col + 1
+    elif code[i] == ')'
+      push_token(i, i + 1, 5 as s8)
+      i = i + 1
+      col = col + 1
+    elif code[i] == '+'
+      push_token(i, i + 1, 7 as s8)
+      i = i + 1
+      col = col + 1
+    elif code[i] == '-'
+      if code[i + 1] == '>'
+        push_token(i, i + 2, 9 as s8)
+        i = i + 2
+        col = col + 2
+      else
+        push_token(i, i + 1, 8 as s8)
+        i = i + 1
+        col = col + 1
+      end
+    elif code[i] == '*'
+      push_token(i, i + 1, 10 as s8)
+      i = i + 1
+      col = col + 1
+    elif code[i] == '/'
+      push_token(i, i + 1, 11 as s8)
+      i = i + 1
+      col = col + 1
+    elif code[i] == '%'
+      push_token(i, i + 1, 12 as s8)
+      i = i + 1
+      col = col + 1
+    elif code[i] == '='
+      if code[i + 1] == '='
+        push_token(i, i + 2, 14 as s8)
+        i = i + 2
+        col = col + 2
+      else
+        push_token(i, i + 1, 13 as s8)
+        i = i + 1
+        col = col + 1
+      end
+    elif code[i] == '!'
+      if code[i + 1] == '='
+        push_token(i, i + 2, 15 as s8)
+        i = i + 2
+        col = col + 2
+      else
+        lerror(path, row, col, "Unexpected `")
+        write(1, code + i + 1, 1)
+        fprint(2, "`\n")
+        exit(1)
+      end
+    elif code[i] == '<'
+      if code[i + 1] == '='
+        push_token(i, i + 2, 17 as s8)
+        i = i + 2
+        col = col + 2
+      else
+        push_token(i, i + 1, 16 as s8)
+        i = i + 1
+        col = col + 1
+      end
+    elif code[i] == '>'
+      if code[i + 1] == '='
+        push_token(i, i + 2, 19 as s8)
+        i = i + 2
+        col = col + 2
+      else
+        push_token(i, i + 1, 18 as s8)
+        i = i + 1
+        col = col + 1
+      end
+    elif code[i] == '&'
+      push_token(i, i + 1, 20 as s8)
+      i = i + 1
+      col = col + 1
+    elif code[i] == '|'
+      push_token(i, i + 1, 21 as s8)
+      i = i + 1
+      col = col + 1
+    elif code[i] == '^'
+      push_token(i, i + 1, 22 as s8)
+      i = i + 1
+      col = col + 1
+    elif code[i] == ':'
+      if code[i + 1] == '='
+        push_token(i, i + 2, 24 as s8)
+        i = i + 2
+        col = col + 2
+      else
+        push_token(i, i + 1, 23 as s8)
+        i = i + 1
+        col = col + 1
+      end
+    elif code[i] == '#'
+      while (i < len) & (code [i] != '\n')
+        i = i + 1
+      end
+    elif code[i] == '\n'
+      i = i + 1
+      row = row + 1
+      col = 1
+    else
+      lerror(path, row, col, "Unexpected `")
+      write(2, code + i, 1)
+      fprint(2, "`\n")
+      exit(1)
+    end
+  end
+
+  i = 0
+
+  while i < tokens_len
+    let tbegin = token_begins[i]
+    let tend = token_ends[i]
+    let ttype = s64_to_str(token_types[i] as s32 as s64)
+
+    print(ttype)
+    print(": ")
+    write(1, code + tbegin, tend - tbegin)
+    println("")
+
+    free(ttype)
+
+    i = i + 1
+  end
+end

@@ -3,7 +3,7 @@ include "unix.mal"
 include "mem.mal"
 
 proc fprint(fd: s64, str: &s8)
-  let len = strlen(str)
+  let len = str_len(str)
   write(fd, str, len)
 end
 
@@ -13,7 +13,7 @@ proc fprintln(fd: s64, str: &s8)
 end
 
 proc print(str: &s8)
-  let len = strlen(str)
+  let len = str_len(str)
   write(1, str, len)
 end
 
@@ -42,7 +42,7 @@ proc read_file(path: &s8) -> &s8
   let content = malloc(size + 1)
   read(fd, content, size)
   let end_ptr = content + size
-  end_ptr := 0
+  end_ptr := 0 as s8
 
   retval content
 end

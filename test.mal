@@ -6,7 +6,10 @@ proc main() -> s64
   let x = 5
   let y = x
   y = (2 + y) * 2
-  let str = "Hello, World!\n"
+  let str0 = "Hello, World!\n"
+  let str1 = "\""
+  let char0 = 'a'
+  let char1 = '''
   #exit(0)
   let r = &y
   r := *r + 1

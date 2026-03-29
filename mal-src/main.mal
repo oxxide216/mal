@@ -1,6 +1,8 @@
 include "../std/unix.mal"
 include "../std/io.mal"
 
+include "lexer.mal"
+
 proc print_usage(program_name: &s8)
   print("Usage: ")
   print(program_name)
@@ -13,6 +15,8 @@ proc error(str: &s8)
 end
 
 proc main(argc: s64, argv: &&s8) -> s64
+  init_lexer()
+
   if argc < 3
     print_usage(argv[0])
     error("No input file")
@@ -26,7 +30,9 @@ proc main(argc: s64, argv: &&s8) -> s64
     retval 1
   end
 
-  print(code)
+  lex(code, argv[2])
+
+  free(code)
 
   retval 0
 end

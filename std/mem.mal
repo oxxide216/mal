@@ -22,3 +22,23 @@ proc free(mem: &s8)
   let real_mem = mem - 8
   munmap(real_mem, *(real_mem as &s64))
 end
+
+proc realloc(mem: &s8, size: s64) -> &s8
+  let new_mem = malloc(size)
+
+  let real_mem = mem - 8
+  let min = *(real_mem as &s64)
+  if min > size
+    min = size
+  end
+
+  let i = 0
+  while i < min
+    new_mem[i] = mem[i]
+    i = i + 1
+  end
+
+  free(mem)
+
+  retval new_mem
+end
