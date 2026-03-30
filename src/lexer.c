@@ -126,6 +126,10 @@ bool lex(Tokens *tokens, Str code, Str file_path, StringBuilder *temp_sb) {
 
       lexeme = sb_to_str(*temp_sb);
 
+      char *new_ptr = malloc(lexeme.len);
+      memcpy(new_ptr, lexeme.ptr, lexeme.len);
+      lexeme.ptr = new_ptr;
+
       temp_sb->len = 0;
     } else if (id == TT_CHAR) {
       sb_push_char(temp_sb, code.ptr[-1]);
