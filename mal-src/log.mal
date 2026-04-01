@@ -1,0 +1,6 @@
+include "../std/io.mal"
+
+proc error(str: &s8)
+  fprint(2, "\e[31;1m[ERROR]\e[0m ")
+  fprint(2, str)
+end

@@ -1,10 +1,16 @@
 include "../std/io.mal"
 
+let code: &s8
 let token_begins: &s64
 let token_ends: &s64
 let token_types: &s8
 let tokens_len: s64
 let tokens_cap: s64
+
+proc init_lexer()
+  tokens_len = 0
+  tokens_cap = 0
+end
 
 proc lerror(path: &s8, row: s64, col: s64, str: &s8)
   let row_str = s64_to_str(row)
@@ -22,11 +28,6 @@ proc lerror(path: &s8, row: s64, col: s64, str: &s8)
   free(col_str)
 end
 
-proc init_lexer()
-  tokens_len = 0
-  tokens_cap = 0
-end
-
 proc push_token(tbegin: s64, tend: s64, ttype: s8)
   if tokens_cap <= tokens_len
     if tokens_cap == 0
@@ -36,8 +37,8 @@ proc push_token(tbegin: s64, tend: s64, ttype: s8)
       token_types = malloc(tokens_cap * sizeof s8)
     else
       tokens_cap = tokens_cap * 2
-      token_begins = realloc(token_begins as &s8, tokens_cap * sizeof s64)
-      token_ends = realloc(token_ends as &s8, tokens_cap * sizeof s64)
+      token_begins = realloc(token_begins as &s8, tokens_cap * sizeof s64) as &s64
+      token_ends = realloc(token_ends as &s8, tokens_cap * sizeof s64) as &s64
       token_types = realloc(token_types, tokens_cap * sizeof s8)
     end
   end
@@ -92,7 +93,9 @@ proc get_ident_token_type(code: &s8, tbegin: s64, tend: s64) -> s8
   retval 0 as s8
 end
 
-proc lex(code: &s8, path: &s8)
+proc lex(_code: &s8, path: &s8)
+  code = _code
+
   let len = str_len(code)
   let i = 0
   let row = 1
@@ -305,6 +308,10 @@ proc lex(code: &s8, path: &s8)
         i = i + 1
         col = col + 1
       end
+    elif code[i] == ','
+      push_token(i, i + 1, 25 as s8)
+      i = i + 1
+      col = col + 1
     elif code[i] == '#'
       while (i < len) & (code [i] != '\n')
         i = i + 1
@@ -320,8 +327,10 @@ proc lex(code: &s8, path: &s8)
       exit(1)
     end
   end
+end
 
-  i = 0
+proc dump_tokens()
+  let i = 0
 
   while i < tokens_len
     let tbegin = token_begins[i]

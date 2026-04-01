@@ -1,0 +1,181 @@
+let var_types: &s64
+let var_begins: &s64
+let var_ends: &s64
+let var_uses: &s64
+let var_is_ref_targets: &s8
+let var_indices: &s64
+let var_offsets: &s64
+let vars_len: s64
+
+proc init_meta_maker()
+  vars_len = 0
+end
+
+proc set_min_vars_len(min_len: s64)
+  if vars_len < min_len
+    let prev_len = vars_len
+    vars_len = min_len
+
+    if prev_len == 0
+      var_types = malloc(vars_len * sizeof s64) as &s64
+      var_begins = malloc(vars_len * sizeof s64) as &s64
+      var_ends = malloc(vars_len * sizeof s64) as &s64
+      var_uses = malloc(vars_len * sizeof s64) as &s64
+      var_is_ref_targets = malloc(vars_len * sizeof s8)
+      var_indices = malloc(vars_len * sizeof s64) as &s64
+      var_offsets = malloc(vars_len * sizeof s64) as &s64
+    else
+      var_types = realloc(var_types as &s8, vars_len * sizeof s64) as &s64
+      var_begins = realloc(var_begins as &s8, vars_len * sizeof s64) as &s64
+      var_ends = realloc(var_ends as &s8, vars_len * sizeof s64) as &s64
+      var_uses = realloc(var_uses as &s8, vars_len * sizeof s64) as &s64
+      var_is_ref_targets = realloc(var_is_ref_targets, vars_len * sizeof s8)
+      var_indices = realloc(var_indices as &s8, vars_len * sizeof s64) as &s64
+      var_offsets = realloc(var_offsets as &s8, vars_len * sizeof s64) as &s64
+    end
+
+    let i = prev_len
+
+    while i < vars_len
+      var_types[i] = -1
+      var_begins[i] = -1
+      var_ends[i] = -1
+      var_uses[i] = 0
+      var_is_ref_targets[i] = 0 as s8
+
+      i = i + 1
+    end
+  end
+end
+
+proc reset_vars()
+  if vars_len > 0
+    free(var_types as &s8)
+    free(var_begins as &s8)
+    free(var_ends as &s8)
+    free(var_uses as &s8)
+    free(var_indices as &s8)
+    free(var_offsets as &s8)
+    vars_len = 0
+  end
+end
+
+proc get_proc_return_type(name: s64) -> s64
+  let name_begin = token_begins[name]
+  let name_end = token_ends[name]
+  let name_len = name_end - name_begin
+
+  let i = 0
+
+  while i < ir_procs_len
+    let temp_begin = token_begins[ir_proc_name_tokens[i]]
+    let temp_end = token_ends[ir_proc_name_tokens[i]]
+
+    if temp_end - temp_begin == name_len
+      if str_n_eq(code + temp_begin, code + name_begin, name_len)
+        retval ir_proc_return_types[i]
+      end
+    end
+
+    i = i + 1
+  end
+
+  retval -1
+end
+
+proc instr_get_dest_type(index: s64) -> s64
+  let type = ir_types[index]
+
+  if type == 0 as s8
+    retval -1
+  elif type == 2 as s8
+    retval var_types[ir_arg1s[index]]
+  elif type == 3 as s8
+    push_type(5 as s8, 0)
+    retval types_len - 1
+  elif type == 4 as s8
+    push_type(2 as s8, 0)
+    retval types_len - 1
+  elif type == 5 as s8
+    retval var_types[ir_arg1s[index]]
+  elif type == 6 as s8
+    push_type(2 as s8, 0)
+    push_type(1 as s8, types_len - 1)
+    retval types_len - 1
+  elif type == 7 as s8
+    push_type(1 as s8, var_types[ir_arg1s[index]])
+    retval types_len - 1
+  elif type == 9 as s8
+    retval type_targets[var_types[ir_arg1s[index]]]
+  elif type == 19 as s8
+    retval get_proc_return_type(ir_arg0_tokens[index])
+  end
+
+  retval 0
+end
+
+proc make_meta_for_proc(index: s64)
+  reset_vars()
+
+  let pbegin = ir_proc_begins[index]
+  let pend = ir_proc_ends[index]
+
+  let i = 0
+
+  set_min_vars_len(ir_proc_params_lens[index])
+
+  while i < ir_proc_params_lens[index]
+    var_types[i] = ir_proc_param_types[index][i]
+    var_begins[i] = 0
+    var_ends[i] = 0
+    var_uses[i] = 0
+
+    i = i + 1
+  end
+
+  i = pbegin
+
+  while i < pend
+    if instr_has_dest(i)
+      let dest_id = ir_dest_ids[i]
+      set_min_vars_len(dest_id + 1)
+      if var_begins[dest_id] == -1
+        var_begins[dest_id] = i
+      else
+        var_uses[dest_id] = var_uses[dest_id] + 1
+      end
+
+      if var_types[dest_id] == -1
+        var_types[dest_id] = instr_get_dest_type(i)
+      end
+    end
+
+    if instr_has_arg1(i)
+      let arg1 = ir_arg1s[i]
+      var_ends[arg1] = i
+      var_uses[arg1] = var_uses[arg1] + 1
+
+      if ir_types[i] == 7 as s8
+        var_is_ref_targets[arg1] = 1 as s8
+      end
+    end
+
+    if instr_has_arg2(i)
+      let arg2 = ir_arg2s[i]
+      var_ends[arg2] = i
+      var_uses[arg2] = var_uses[arg2] + 1
+    end
+
+    i = i + 1
+  end
+
+  i = pbegin
+
+  while i < pend
+    if ir_types[i] == 0 as s8
+      ir_arg1s[i] = var_types[ir_dest_ids[i]]
+    end
+
+    i = i + 1
+  end
+end

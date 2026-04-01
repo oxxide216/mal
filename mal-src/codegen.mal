@@ -1,0 +1,206 @@
+include "meta.mal"
+include "alloc.mal"
+
+proc print_type_prefix(fd: s64, index: s64)
+  let kind = type_kinds[index]
+
+  if kind == 1 as s8
+    fprint(fd, "qword")
+  elif kind == 2 as s8
+    fprint(fd, "byte")
+  elif kind == 3 as s8
+    fprint(fd, "word")
+  elif kind == 4 as s8
+    fprint(fd, "dword")
+  elif kind == 5 as s8
+    fprint(fd, "qword")
+  end
+
+end
+
+proc print_var_loc(fd: s64, index: s64)
+  let type = var_types[index]
+  let reg_index = var_indices[index]
+  let offset = var_offsets[index]
+
+  if reg_index == 0
+    fprint(fd, "rbx")
+  elif reg_index == 1
+    fprint(fd, "r12")
+  elif reg_index == 2
+    fprint(fd, "r13")
+  elif reg_index == 3
+    fprint(fd, "r14")
+  elif reg_index == 4
+    fprint(fd, "r15")
+  elif offset < 0
+    let str = s64_to_str(0 - offset)
+    print_type_prefix(fd, type)
+    fprint(fd, "[rbp-")
+    fprint(fd, str)
+    fprint(fd, "]")
+    free(str)
+  else
+    let str = s64_to_str(offset)
+    print_type_prefix(fd, type)
+    fprint(fd, "[rbp+")
+    fprint(fd, str)
+    fprint(fd, "]")
+    free(str)
+  end
+end
+
+proc gen_asm_instr(fd: s64, index: s64)
+  let type = ir_types[index]
+
+  if type == 2 as s8
+    fprintln(fd, "  ; TODO: op codegen")
+  elif type == 3 as s8
+    let token = ir_arg0_tokens[index]
+
+    fprint(fd, "  mov ")
+    print_var_loc(fd, ir_dest_ids[index])
+    fprint(fd, ",")
+    write(fd, code + token_begins[token],
+          token_ends[token] - token_begins[token])
+    fprintln(fd, "")
+  elif type == 4 as s8
+    let str = s64_to_str(ir_arg1s[index])
+
+    fprint(fd, "  mov ")
+    print_var_loc(fd, ir_dest_ids[index])
+    fprint(fd, ",")
+    fprintln(fd, str)
+
+    free(str)
+  elif type == 5 as s8
+    fprint(fd, "  mov ")
+    print_var_loc(fd, ir_dest_ids[index])
+    fprint(fd, ",")
+    print_var_loc(fd, ir_arg1s[index])
+    fprintln(fd, "")
+  elif type == 6 as s8
+    fprintln(fd, "  ; TODO: str codegen")
+  elif type == 7 as s8
+    fprint(fd, "  lea ")
+    print_var_loc(fd, ir_dest_ids[index])
+    fprint(fd, ",")
+    print_var_loc(fd, ir_arg1s[index])
+    fprintln(fd, "")
+  elif type == 8 as s8
+    fprintln(fd, "  ; TODO: storep codegen")
+  elif type == 9 as s8
+    fprintln(fd, "  ; TODO: loadp codegen")
+  elif type == 10 as s8
+    fprint(fd, "  ")
+  elif type == 11 as s8
+    let token = ir_arg0_tokens[index]
+
+    if token == -1
+      print_var_loc(fd, ir_arg1s[index])
+    else
+      write(fd, code + token_begins[token] + 1,
+            token_ends[token] - token_begins[token] - 2)
+    end
+  elif type == 12 as s8
+    fprintln(fd, "")
+  elif type == 13 as s8
+    let str = s64_to_str(ir_arg1s[index])
+
+    fprint(fd, "  jmp .l")
+    fprintln(fd, str)
+
+    free(str)
+  elif type == 14 as s8
+    fprintln(fd, "  ; TODO: jump if zero codegen")
+  elif type == 15 as s8
+    let str = s64_to_str(ir_arg1s[index])
+
+    fprint(fd, ".l")
+    fprint(fd, str)
+    fprintln(fd, ":")
+
+    free(str)
+  elif type == 16 as s8
+    fprintln(fd, "  ; TODO: retval codegen")
+  elif type == 17 as s8
+    fprintln(fd, "  jmp .end")
+  elif type == 18 as s8
+    fprintln(fd, "  ; TODO: call codegen")
+  elif type == 19 as s8
+    fprintln(fd, "  ; TODO: call store codegen")
+  end
+end
+
+proc gen_asm(fd: s64)
+  fprintln(fd, "section '.text'")
+  fprintln(fd, "global _start")
+  fprintln(fd, "_start:")
+  fprintln(fd, "  lea rsi,qword[rsp+8]")
+  fprintln(fd, "  mov rdi,qword[rsp]")
+  fprintln(fd, "  mov rax,0")
+  fprintln(fd, "  call $main")
+  fprintln(fd, "  mov rdi,rax")
+  fprintln(fd, "  mov rax,60")
+  fprintln(fd, "  syscall")
+
+  let i = 0
+
+  while i < ir_procs_len
+    let pname_token = ir_proc_name_tokens[i]
+    let pbegin = ir_proc_begins[i]
+    let pend = ir_proc_ends[i]
+
+    if pbegin == -1
+      dump_proc_ir(i)
+
+      fprint(fd, "\nextern $")
+      write(fd, code + token_begins[pname_token],
+            token_ends[pname_token] - token_begins[pname_token])
+      fprintln(fd, "")
+    else
+      make_meta_for_proc(i)
+      alloc_regs_for_proc(i)
+
+      dump_proc_ir(i)
+
+      fprint(fd, "\n$")
+      write(fd, code + token_begins[pname_token],
+            token_ends[pname_token] - token_begins[pname_token])
+      fprintln(fd, ":")
+
+      let stack_used_str = 0 as &s8
+
+      if stack_used > 0
+        stack_used_str = s64_to_str(stack_used)
+
+        fprintln(fd, "  push rbp")
+        fprintln(fd, "  mov rbp,rsp")
+        fprint(fd, "  sub rsp,")
+        fprintln(fd, stack_used_str)
+      end
+
+      let j = pbegin
+
+      while j < pend
+        gen_asm_instr(fd, j)
+
+        j = j + 1
+      end
+
+      fprintln(fd, ".end:")
+
+      if stack_used > 0
+        fprint(fd, "  add rsp,")
+        fprintln(fd, stack_used_str)
+        fprintln(fd, "  leave")
+
+        free(stack_used_str)
+      end
+
+      fprintln(fd, "  ret")
+    end
+
+    i = i + 1
+  end
+end

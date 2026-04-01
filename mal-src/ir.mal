@@ -1,0 +1,912 @@
+include "../std/unix.mal"
+
+include "log.mal"
+
+let pos: s64
+
+let labels_count: s64
+let vars_count: s64
+
+let ir_proc_name_tokens: &s64
+let ir_proc_return_types: &s64
+let ir_proc_begins: &s64
+let ir_proc_ends: &s64
+let ir_procs_len: s64
+let ir_procs_cap: s64
+
+let ir_proc_param_name_tokens: &&s64
+let ir_proc_param_types: &&s64
+let ir_proc_params_lens: &s64
+let ir_proc_params_caps: &s64
+
+let ir_types: &s8
+let ir_dest_ids: &s64
+let ir_arg0_tokens: &s64
+let ir_arg1s: &s64
+let ir_arg2s: &s64
+let ir_len: s64
+let ir_cap: s64
+
+let named_var_name_tokens: &s64
+let named_var_ids: &s64
+let named_vars_len: s64
+let named_vars_cap: s64
+
+let global_name_tokens: &s64
+let global_types: &s64
+let globals_len: s64
+let globals_cap: s64
+
+let type_kinds: &s8
+let type_targets: &s64
+let types_len: s64
+let types_cap: s64
+
+proc init_ir_maker()
+  pos = 0
+  labels_count = 0
+  vars_count = 0
+  ir_procs_len = 0
+  ir_procs_cap = 0
+  ir_len = 0
+  ir_cap = 0
+  named_vars_len = 0
+  named_vars_cap = 0
+  globals_len = 0
+  globals_cap = 0
+  types_len = 0
+  types_cap = 0
+end
+
+proc push_ir_instr(type: s8, dest_id: s64, arg0_token: s64, arg1: s64, arg2: s64)
+  if ir_cap <= ir_len
+    if ir_cap == 0
+      ir_cap = 10
+      ir_types = malloc(ir_cap * sizeof s8)
+      ir_dest_ids = malloc(ir_cap * sizeof s64) as &s64
+      ir_arg0_tokens = malloc(ir_cap * sizeof s64) as &s64
+      ir_arg1s = malloc(ir_cap * sizeof s64) as &s64
+      ir_arg2s = malloc(ir_cap * sizeof s64) as &s64
+    else
+      ir_cap = ir_cap * 2
+      ir_types = realloc(ir_types, ir_cap * sizeof s8)
+      ir_dest_ids = realloc(ir_dest_ids as &s8, ir_cap * sizeof s64) as &s64
+      ir_arg0_tokens = realloc(ir_arg0_tokens as &s8, ir_cap * sizeof s64) as &s64
+      ir_arg1s = realloc(ir_arg1s as &s8, ir_cap * sizeof s64) as &s64
+      ir_arg2s = realloc(ir_arg2s as &s8, ir_cap * sizeof s64) as &s64
+    end
+  end
+
+  ir_types[ir_len] = type
+  ir_dest_ids[ir_len] = dest_id
+  ir_arg0_tokens[ir_len] = arg0_token
+  ir_arg1s[ir_len] = arg1
+  ir_arg2s[ir_len] = arg2
+  ir_len = ir_len + 1
+end
+
+proc push_ir_proc(name: s64, pbegin: s64, pend: s64)
+  if ir_procs_cap <= ir_procs_len
+    if ir_procs_cap == 0
+      ir_procs_cap = 10
+      ir_proc_name_tokens = malloc(ir_procs_cap * sizeof s64) as &s64
+      ir_proc_return_types = malloc(ir_procs_cap * sizeof s64) as &s64
+      ir_proc_begins = malloc(ir_procs_cap * sizeof s64) as &s64
+      ir_proc_ends = malloc(ir_procs_cap * sizeof s64) as &s64
+      ir_proc_param_name_tokens = malloc(ir_procs_cap * sizeof &s64) as &&s64
+      ir_proc_param_types = malloc(ir_procs_cap * sizeof &s64) as &&s64
+      ir_proc_params_lens = malloc(ir_procs_cap * sizeof s64) as &s64
+      ir_proc_params_caps = malloc(ir_procs_cap * sizeof s64) as &s64
+    else
+      ir_procs_cap = ir_procs_cap * 2
+      ir_proc_name_tokens = realloc(ir_proc_name_tokens as &s8, ir_cap * sizeof s64) as &s64
+      ir_proc_return_types = realloc(ir_proc_return_types as &s8, ir_cap * sizeof s64) as &s64
+      ir_proc_begins = realloc(ir_proc_begins as &s8, ir_cap * sizeof s64) as &s64
+      ir_proc_ends = realloc(ir_proc_ends as &s8, ir_cap * sizeof s64) as &s64
+      ir_proc_param_name_tokens = realloc(ir_proc_param_name_tokens as &s8,
+                                          ir_procs_cap * sizeof &s64) as &&s64
+      ir_proc_param_types = realloc(ir_proc_param_types as &s8,
+                                    ir_procs_cap * sizeof &s64) as &&s64
+      ir_proc_params_lens = realloc(ir_proc_params_lens as &s8,
+                                    ir_procs_cap * sizeof s64) as &s64
+      ir_proc_params_caps = realloc(ir_proc_params_caps as &s8,
+                                    ir_procs_cap * sizeof s64) as &s64
+    end
+  end
+
+  ir_proc_name_tokens[ir_procs_len] = name
+  ir_proc_begins[ir_procs_len] = pbegin
+  ir_proc_ends[ir_procs_len] = pend
+
+  ir_proc_param_name_tokens[ir_procs_len] = 0 as &s64
+  ir_proc_param_types[ir_procs_len] = 0 as &s64
+  ir_proc_params_lens[ir_procs_len] = 0
+  ir_proc_params_caps[ir_procs_len] = 0
+
+  ir_procs_len = ir_procs_len + 1
+end
+
+proc push_ir_proc_param(index: s64, name: s64, type: s64)
+  let len = ir_proc_params_lens[index]
+  let cap = ir_proc_params_caps[index]
+
+  if cap <= len
+    if cap == 0
+      ir_proc_params_caps[index] = 10
+      cap = ir_proc_params_caps[index]
+      ir_proc_param_name_tokens[index] = malloc(cap * sizeof s64) as &s64
+      ir_proc_param_types[index] = malloc(cap * sizeof s64) as &s64
+    else
+      ir_proc_params_caps[index] = cap * 2
+      cap = ir_proc_params_caps[index]
+      ir_proc_param_name_tokens[index] = realloc(ir_proc_param_name_tokens[index] as &s8,
+                                                 cap * sizeof s64) as &s64
+      ir_proc_param_types[index] = realloc(ir_proc_param_types[index] as &s8,
+                                           cap * sizeof s64) as &s64
+    end
+  end
+
+  let name_tokens = ir_proc_param_name_tokens[index]
+  let types = ir_proc_param_types[index]
+
+  name_tokens[len] = name
+  types[len] = type
+  ir_proc_params_lens[index] = len + 1
+end
+
+proc push_named_var(name: s64, id: s64)
+  if named_vars_cap <= named_vars_len
+    if named_vars_cap == 0
+      named_vars_cap = 10
+      named_var_name_tokens = malloc(named_vars_cap * sizeof s64) as &s64
+      named_var_ids = malloc(named_vars_cap * sizeof s64) as &s64
+    else
+      named_vars_cap = named_vars_cap * 2
+      named_var_name_tokens = realloc(named_var_name_tokens as &s8, named_vars_cap * sizeof s64) as &s64
+      named_var_ids = realloc(named_var_ids as &s8, named_vars_cap * sizeof s64) as &s64
+    end
+  end
+
+  named_var_name_tokens[named_vars_len] = name
+  named_var_ids[named_vars_len] = id
+  named_vars_len = named_vars_len + 1
+end
+
+proc push_global(name: s64, type: s64)
+  if globals_cap <= globals_len
+    if globals_cap == 0
+      globals_cap = 10
+      global_name_tokens = malloc(types_cap * sizeof s64) as &s64
+      global_types = malloc(types_cap * sizeof s64) as &s64
+    else
+      globals_cap = globals_cap * 2
+      global_name_tokens = realloc(global_name_tokens as &s8, globals_cap * sizeof s64) as &s64
+      global_types = realloc(global_types as &s8, globals_cap * sizeof s64) as &s64
+    end
+  end
+
+  global_name_tokens[globals_len] = name
+  global_types[globals_len] = type
+  globals_len = globals_len + 1
+end
+
+proc push_type(kind: s8, target: s64)
+  if types_cap <= types_len
+    if types_cap == 0
+      types_cap = 10
+      type_kinds = malloc(types_cap * sizeof s8)
+      type_targets = malloc(types_cap * sizeof s64) as &s64
+    else
+      types_cap = types_cap * 2
+      type_kinds = realloc(type_kinds, types_cap * sizeof s8)
+      type_targets = realloc(type_targets as &s8, types_cap * sizeof s64) as &s64
+    end
+  end
+
+  type_kinds[types_len] = kind
+  type_targets[types_len] = target
+  types_len = types_len + 1
+end
+
+proc alloc_var(push_instr: s8) -> s64
+  let id = vars_count
+  vars_count = vars_count + 1
+
+  if push_instr
+    #                              v A variable type, will be set at type checking phase
+    push_ir_instr(0 as s8, id, -1, 0, 0)
+  end
+
+  retval id
+end
+
+proc mask(ttype: s64) -> s64
+  retval 1 << ttype
+end
+
+proc expect_token(mask: s64)
+  if pos >= tokens_len
+    error("Unexpected EOF\n")
+    exit(1)
+  end
+
+  let i = 0
+
+  while i < 64
+    if (1 << token_types[pos] as s32 as s64) & mask
+      ret
+    end
+
+    i = i + 1
+  end
+
+  error("Unexpected token: `")
+  write(2, code + token_begins[pos], token_ends[pos] - token_begins[pos])
+  fprint(2, "`\n")
+  exit(1)
+end
+
+proc escape_char(char: s8) -> s8
+  if char == 'n'
+    retval '\n'
+  elif char == 'r'
+    retval '\r'
+  elif char == 't'
+    retval '\t'
+  elif char == 'v'
+    retval '\v'
+  elif char == 'b'
+    retval '\b'
+  elif char == 'e'
+    retval '\e'
+  elif char == '0'
+    retval '\0'
+  end
+
+  retval char
+end
+
+proc get_named_var_id(name: s64) -> s64
+  let name_begin = token_begins[name]
+  let name_end = token_ends[name]
+  let name_len = name_end - name_begin
+  let i = named_vars_len
+
+  while i > 0
+    let temp_begin = token_begins[named_var_name_tokens[i - 1]]
+    let temp_end = token_ends[named_var_name_tokens[i - 1]]
+
+    if temp_end - temp_begin == name_len
+      if str_n_eq(code + temp_begin, code + name_begin, name_len)
+        retval named_var_ids[i - 1]
+      end
+    end
+
+    i = i - 1
+  end
+
+  error("Variable ")
+  write(2, code + name_begin, name_end - name_begin)
+  fprintln(2, " was not defined before usage")
+
+  exit(1)
+end
+
+extern proc make_ir_expr(dest_id: s64)
+
+proc make_ir_primary_expr(dest_id: s64)
+  expect_token(mask(1) | mask(0) | mask(4) |
+               mask(2) | mask(3) | mask(20) |
+               mask(10))
+  if token_types[pos] == 1 as s8
+    let num_token = pos
+
+    pos = pos + 1
+
+    push_ir_instr(3 as s8, dest_id, num_token, 0, 0)
+  elif token_types[pos] == 0 as s8
+    let name_token = pos
+    pos = pos + 1
+
+    if (pos < tokens_len) & (token_types[pos] == 4 as s8)
+      pos = pos + 1
+
+      let params_len = 0
+
+      while (pos < tokens_len) & (token_types[pos] != 5 as s8)
+        if params_len > 0
+          expect_token(mask(25))
+          pos = pos + 1
+        end
+
+        params_len = params_len + 1
+
+        make_ir_expr(0 - params_len)
+      end
+
+      expect_token(mask(5))
+      pos = pos + 1
+
+      push_ir_instr(19 as s8, dest_id, name_token, params_len, 0)
+    else
+      let id = get_named_var_id(name_token)
+
+      push_ir_instr(5 as s8, dest_id, -1, id, 0)
+    end
+  elif token_types[pos] == 4 as s8
+    pos = pos + 1
+
+    make_ir_expr(dest_id)
+
+    expect_token(mask(5))
+    pos = pos + 1
+  elif token_types[pos] == 2 as s8
+    let lit_token = pos
+
+    pos = pos + 1
+
+    push_ir_instr(6 as s8, dest_id, lit_token, 0, 0)
+  elif token_types[pos] == 3 as s8
+    let char_token = pos
+
+    pos = pos + 1
+
+    let char = code[token_begins[char_token] + 1]
+    if char == '\\'
+      char = escape_char(code[token_begins[char_token] + 2])
+    end
+
+    push_ir_instr(4 as s8, dest_id, -1, char as s32 as s64, 0)
+  elif token_types[pos] == 20 as s8
+    pos = pos + 1
+
+    expect_token(mask(0))
+    let name_token = pos
+    let id = get_named_var_id(name_token)
+    pos = pos + 1
+
+    push_ir_instr(7 as s8, dest_id, -1, id, 0)
+  elif token_types[pos] == 10 as s8
+    pos = pos + 1
+
+    make_ir_primary_expr(dest_id)
+
+    push_ir_instr(9 as s8, dest_id, -1, dest_id, 0)
+  end
+end
+
+proc make_ir_expr_mul(dest_id: s64)
+  let temp0 = alloc_var(1 as s8)
+  make_ir_primary_expr(temp0)
+
+  while (token_types[pos] == 10 as s8) |
+        (token_types[pos] == 11 as s8) |
+        (token_types[pos] == 12 as s8)
+    let op_token = pos
+
+    pos = pos + 1
+
+    let temp1 = alloc_var(1 as s8)
+    make_ir_primary_expr(temp1)
+
+    push_ir_instr(2 as s8, temp0, op_token, temp0, temp1)
+  end
+
+  push_ir_instr(5 as s8, dest_id, -1, temp0, 0)
+end
+
+proc make_ir_expr_add(dest_id: s64)
+  let temp0 = alloc_var(1 as s8)
+  make_ir_expr_mul(temp0)
+
+  while (token_types[pos] == 7 as s8) |
+        (token_types[pos] == 8 as s8)
+    let op_token = pos
+
+    pos = pos + 1
+
+    let temp1 = alloc_var(1 as s8)
+    make_ir_expr_mul(temp1)
+
+    push_ir_instr(2 as s8, dest_id, op_token, temp0, temp1)
+  end
+
+  push_ir_instr(5 as s8, dest_id, -1, temp0, 0)
+end
+
+proc make_ir_expr_cmp(dest_id: s64)
+  let temp0 = alloc_var(1 as s8)
+  make_ir_expr_add(temp0)
+
+  while (token_types[pos] == 14 as s8) |
+        (token_types[pos] == 15 as s8) |
+        (token_types[pos] == 16 as s8) |
+        (token_types[pos] == 17 as s8) |
+        (token_types[pos] == 18 as s8) |
+        (token_types[pos] == 19 as s8)
+    let op_token = pos
+
+    pos = pos + 1
+
+    let temp1 = alloc_var(1 as s8)
+    make_ir_expr_add(temp1)
+
+    push_ir_instr(2 as s8, dest_id, op_token, temp0, temp1)
+  end
+
+  push_ir_instr(5 as s8, dest_id, -1, temp0, 0)
+end
+
+proc make_ir_expr(dest_id: s64)
+  make_ir_expr_cmp(dest_id)
+end
+
+proc make_ir_instrs()
+  while (pos < tokens_len) & (token_types[pos] != 65 as s8) &
+        (token_types[pos] != 72 as s8) & (token_types[pos] != 73 as s8)
+    expect_token(mask(66) | mask(0) | mask(2) |
+                 mask(71) | mask(67) | mask(68) |
+                 mask(74))
+    if token_types[pos] == 66 as s8
+      pos = pos + 1
+
+      expect_token(mask(0))
+      let name_token = pos
+      pos = pos + 1
+
+      expect_token(mask(13))
+      pos = pos + 1
+
+      let id = alloc_var(1 as s8)
+      push_named_var(name_token, id)
+
+      make_ir_expr(id)
+    elif token_types[pos] == 0 as s8
+      let name_token = pos
+      pos = pos + 1
+
+      if (pos < tokens_len) & (token_types[pos] == 24 as s8)
+        pos = pos + 1
+
+        let id = get_named_var_id(name_token)
+
+        let temp = alloc_var(1 as s8)
+        make_ir_expr(temp)
+
+        push_ir_instr(8 as s8, 0, -1, id, temp)
+      elif (pos < tokens_len) & (token_types[pos] == 4 as s8)
+        pos = pos + 1
+
+        let params_len = 0
+
+        while (pos < tokens_len) & (token_types[pos] != 5 as s8)
+          if params_len > 0
+            expect_token(mask(25))
+            pos = pos + 1
+          end
+
+          params_len = params_len + 1
+
+          make_ir_expr(0 - params_len)
+        end
+
+        expect_token(mask(5))
+        pos = pos + 1
+
+        push_ir_instr(18 as s8, 0, name_token, params_len, 0)
+      else
+        expect_token(mask(13))
+        pos = pos + 1
+
+        let id = get_named_var_id(name_token)
+
+        make_ir_expr(id)
+      end
+    elif token_types[pos] == 2 as s8
+      let text_token = pos
+
+      pos = pos + 1
+
+      push_ir_instr(10 as s8, 0, -1, 0, 0)
+      push_ir_instr(11 as s8, 0, text_token, 0, 0)
+
+      while token_types[pos] == 25 as s8
+        pos = pos + 1
+
+        expect_token(mask(0) | mask(2))
+        text_token = pos
+        pos = pos + 1
+
+        if token_types[text_token] == 0 as s8
+          let id = get_named_var_id(text_token)
+          push_ir_instr(11 as s8, 0, -1, id, 0)
+        else
+          push_ir_instr(11 as s8, 0, text_token, 0, 0)
+        end
+      end
+
+      push_ir_instr(12 as s8, 0, -1, 0, 0)
+    elif token_types[pos] == 71 as s8
+      pos = pos + 1
+
+      let next_label = labels_count
+      labels_count = labels_count + 1
+
+      let cond = alloc_var(1 as s8)
+      make_ir_expr(cond)
+
+      push_ir_instr(14 as s8, 0, -1, next_label, cond)
+
+      make_ir_instrs()
+
+      let end_label = -1
+
+      while token_types[pos] == 72 as s8
+        pos = pos + 1
+
+        if end_label == -1
+          end_label = labels_count
+          labels_count = labels_count + 1
+        end
+
+        push_ir_instr(13 as s8, 0, -1, end_label, 0)
+        push_ir_instr(15 as s8, 0, -1, next_label, 0)
+
+        next_label = labels_count
+        labels_count = labels_count + 1
+
+        cond = alloc_var(1 as s8)
+        make_ir_expr(cond)
+
+        push_ir_instr(14 as s8, 0, -1, next_label, cond)
+
+        make_ir_instrs()
+      end
+
+      if end_label != -1
+        push_ir_instr(13 as s8, 0, -1, end_label, 0)
+        push_ir_instr(15 as s8, 0, -1, next_label, 0)
+      end
+
+      if token_types[pos] == 73 as s8
+        pos = pos + 1
+
+        push_ir_instr(13 as s8, 0, -1, end_label, 0)
+
+        make_ir_instrs()
+      end
+
+      if end_label != -1
+        push_ir_instr(15 as s8, 0, -1, end_label, 0)
+      end
+
+      expect_token(mask(65))
+      pos = pos + 1
+    elif token_types[pos] == 74 as s8
+      pos = pos + 1
+
+      let begin_label = labels_count
+      labels_count = labels_count + 1
+
+      let end_label = labels_count
+      labels_count = labels_count + 1
+
+      push_ir_instr(15 as s8, 0, -1, begin_label, 0)
+
+      let cond = alloc_var(1 as s8)
+      make_ir_expr(cond)
+
+      push_ir_instr(14 as s8, 0, -1, end_label, cond)
+
+      make_ir_instrs()
+
+      push_ir_instr(13 as s8, 0, -1, begin_label, 0)
+      push_ir_instr(15 as s8, 0, -1, end_label, 0)
+
+      expect_token(mask(65))
+      pos = pos + 1
+    elif token_types[pos] == 67 as s8
+      pos = pos + 1
+
+      let result = alloc_var(1 as s8)
+      make_ir_expr(result)
+
+      push_ir_instr(16 as s8, 0, -1, result, 0)
+    elif token_types[pos] == 68 as s8
+      pos = pos + 1
+
+      push_ir_instr(17 as s8, 0, -1, 0, 0)
+    end
+  end
+end
+
+proc str_to_type_kind(sbegin: s64, send: s64) -> s8
+  if str_n_eq(code + sbegin, "unit", 4)
+    retval 0 as s8
+  elif str_n_eq(code + sbegin, "s8", 2)
+    retval 2 as s8
+  elif str_n_eq(code + sbegin, "s16", 3)
+    retval 3 as s8
+  elif str_n_eq(code + sbegin, "s32", 3)
+    retval 4 as s8
+  elif str_n_eq(code + sbegin, "s64", 3)
+    retval 5 as s8
+  end
+
+  error("Unknown type: ")
+  write(2, code + sbegin, send - sbegin)
+  fprintln(2, "")
+  exit(1)
+end
+
+proc make_type() -> s64
+  expect_token(mask(0) | mask(20))
+  if token_types[pos] == 0 as s8
+    let kind = str_to_type_kind(token_begins[pos], token_ends[pos])
+
+    pos = pos + 1
+
+    push_type(kind, 0)
+  elif token_types[pos] == 20 as s8
+    pos = pos + 1
+
+    let kind = 1 as s8
+    let target = make_type()
+    push_type(kind, target)
+  end
+
+  retval types_len - 1
+end
+
+proc make_ir_proc(pbegin: s64)
+  expect_token(mask(0))
+  let name_token = pos
+  pos = pos + 1
+
+  let index = ir_procs_len
+
+  push_ir_proc(name_token, pbegin, pbegin)
+
+  expect_token(mask(4))
+  pos = pos + 1
+
+  let first = 1
+
+  while (pos < tokens_len) & (token_types[pos] != 5 as s8)
+    if first
+      first = 0
+    else
+      expect_token(mask(25))
+      pos = pos + 1
+    end
+
+    expect_token(mask(0))
+    let param_name_token = pos
+    pos = pos + 1
+
+    expect_token(mask(23))
+    pos = pos + 1
+
+    let param_type = make_type()
+
+    push_ir_proc_param(index, param_name_token, param_type)
+  end
+
+  expect_token(mask(5))
+  pos = pos + 1
+
+  if (pos < tokens_len) & (token_types[pos] == 9 as s8)
+    pos = pos + 1
+
+    ir_proc_return_types[index] = make_type()
+  end
+end
+
+proc make_ir()
+  while pos < tokens_len
+    expect_token(mask(64) | mask(66) | mask(69))
+    if token_types[pos] == 64 as s8
+      pos = pos + 1
+
+      let index = ir_procs_len
+
+      make_ir_proc(ir_len)
+
+      labels_count = 0
+      vars_count = 0
+      named_vars_len = 0
+
+      let i = 0
+
+      while i < ir_proc_params_lens[index]
+        let id = alloc_var(0 as s8)
+        push_named_var(ir_proc_param_name_tokens[index][i], id)
+
+        i = i + 1
+      end
+
+      make_ir_instrs()
+
+      ir_proc_ends[index] = ir_len
+
+      expect_token(mask(65))
+      pos = pos + 1
+    elif token_types[pos] == 66 as s8
+      pos = pos + 1
+
+      expect_token(mask(0))
+      let name_token = pos
+      pos = pos + 1
+
+      expect_token(mask(23))
+      pos = pos + 1
+
+      let type = make_type()
+
+      push_global(name_token, type)
+    elif token_types[pos] == 69 as s8
+      pos = pos + 1
+
+      expect_token(mask(64))
+      pos = pos + 1
+
+      make_ir_proc(-1)
+    end
+  end
+end
+
+proc print_instr_type(type: s8)
+  if type == 0 as s8
+    print("ALLOC")
+  elif type == 2 as s8
+    print("OP")
+  elif type == 3 as s8
+    print("NUM")
+  elif type == 4 as s8
+    print("CHAR")
+  elif type == 5 as s8
+    print("LOAD")
+  elif type == 6 as s8
+    print("STR")
+  elif type == 7 as s8
+    print("ADDR")
+  elif type == 8 as s8
+    print("STOREP")
+  elif type == 9 as s8
+    print("LOADP")
+  elif type == 10 as s8
+    print("ASM BEGIN")
+  elif type == 11 as s8
+    print("ASM")
+  elif type == 12 as s8
+    print("ASM END")
+  elif type == 13 as s8
+    print("JUMP TO")
+  elif type == 14 as s8
+    print("JUMP IF ZERO TO")
+  elif type == 15 as s8
+    print("LABEL")
+  elif type == 16 as s8
+    print("RETVAL")
+  elif type == 17 as s8
+    print("RET")
+  elif type == 18 as s8
+    print("CALL")
+  elif type == 19 as s8
+    print("CALL")
+  end
+end
+
+proc instr_has_dest(index: s64) -> s8
+  let type = ir_types[index]
+  retval (type == 0 as s8) | (type == 2 as s8) |
+         (type == 3 as s8) | (type == 4 as s8) |
+         (type == 5 as s8) | (type == 6 as s8) |
+         (type == 7 as s8) | (type == 9 as s8) |
+         (type == 19 as s8)
+end
+
+proc instr_has_arg1(index: s64) -> s8
+  let type = ir_types[index]
+  let token = ir_arg0_tokens[index]
+  retval (type == 0 as s8) | (type == 2 as s8) |
+         (type == 4 as s8) | (type == 5 as s8) |
+         (type == 7 as s8) | (type == 8 as s8) |
+         (type == 9 as s8) | ((type == 11 as s8) & (token == -1)) |
+         (type == 13 as s8) | (type == 14 as s8) |
+         (type == 15 as s8) | (type == 16 as s8) |
+         (type == 18 as s8)
+end
+
+proc instr_has_arg2(index: s64) -> s8
+  let type = ir_types[index]
+  retval (type == 2 as s8) | (type == 8 as s8) |
+         (type == 14 as s8)
+end
+
+proc print_type(index: s64)
+  let kind = type_kinds[index]
+  let target = type_targets[index]
+
+  if kind == 0 as s8
+    print("unit")
+  elif kind == 1 as s8
+    print("&")
+    print_type(target)
+  elif kind == 2 as s8
+    print("s8")
+  elif kind == 3 as s8
+    print("s16")
+  elif kind == 4 as s8
+    print("s32")
+  elif kind == 5 as s8
+    print("s64")
+  end
+end
+
+proc dump_proc_ir(index: s64)
+  let name = ir_proc_name_tokens[index]
+  let pbegin = ir_proc_begins[index]
+  let pend = ir_proc_ends[index]
+
+  if pbegin == -1
+    if index > 0
+      println("")
+    end
+    print("extern proc ")
+    write(1, code + token_begins[name], token_ends[name] - token_begins[name])
+    println("()")
+  else
+    if index > 0
+      println("")
+    end
+    print("proc ")
+    write(1, code + token_begins[name], token_ends[name] - token_begins[name])
+    println("()")
+
+    let i = pbegin
+
+    while i < pend
+      let itype = ir_types[i]
+      let idest_id = ir_dest_ids[i]
+      let iarg0_token = ir_arg0_tokens[i]
+      let iarg1 = ir_arg1s[i]
+      let iarg2 = ir_arg2s[i]
+
+      print("  ")
+      if instr_has_dest(i)
+        let str = s64_to_str(idest_id)
+        print(str)
+        print(" = ")
+        free(str)
+      end
+      print_instr_type(itype)
+      if iarg0_token != -1
+        print(" ")
+        write(1, code + token_begins[iarg0_token],
+              token_ends[iarg0_token] - token_begins[iarg0_token])
+      end
+      if instr_has_arg1(i)
+        print(" ")
+        if itype == 0 as s8
+          print_type(iarg1)
+        else
+          let str = s64_to_str(iarg1)
+          print(str)
+          free(str)
+        end
+      end
+      if instr_has_arg2(i)
+        print(" ")
+        let str = s64_to_str(iarg2)
+        print(str)
+        free(str)
+      end
+      println("")
+
+      i = i + 1
+    end
+
+    println("end")
+  end
+end

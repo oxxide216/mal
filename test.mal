@@ -1,8 +1,8 @@
-extern proc exit(code: s32) -> s32
+extern proc exit(code: s32)
 
 let global: s64
 
-proc main() -> s64
+proc main()
   let x = 5
   let y = x
   y = (2 + y) * 2
@@ -10,19 +10,30 @@ proc main() -> s64
   let str1 = "\""
   let char0 = 'a'
   let char1 = '''
-  #exit(0)
+  exit(0)
   let r = &y
   r := *r + 1
-  "; Hiiii! :3"
+  "; Hiiii! :3 ", r
 
-  #if y < 16
-  #  retval 1
-  #elif 1 == 1
-  #  retval 2
-  #else
-  #  retval 0
-  #end
+  if y < 16
+    retval 1
+  elif 1 == 1
+    retval 2
+  else
+    retval 0
+  end
 
-  global = 2 + 2
-  retval global
+  let i = 0
+  while i < 10
+    i = i + 1
+  end
+
+  #global = 2 + 2
+  #retval global
+end
+
+proc exit(code: s32) -> s32
+  "mov rax,60"
+  "mov rdi,", code
+  "syscall"
 end

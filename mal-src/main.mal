@@ -1,7 +1,9 @@
-include "../std/unix.mal"
 include "../std/io.mal"
 
 include "lexer.mal"
+include "ir.mal"
+include "codegen.mal"
+include "log.mal"
 
 proc print_usage(program_name: &s8)
   print("Usage: ")
@@ -9,13 +11,10 @@ proc print_usage(program_name: &s8)
   println(" [OUTPUT FILE] [INPUT FILE]")
 end
 
-proc error(str: &s8)
-  fprint(2, "\e[31;1m[ERROR]\e[0m ")
-  fprint(2, str)
-end
-
 proc main(argc: s64, argv: &&s8) -> s64
   init_lexer()
+  init_ir_maker()
+  init_meta_maker()
 
   if argc < 3
     print_usage(argv[0])
@@ -31,7 +30,14 @@ proc main(argc: s64, argv: &&s8) -> s64
   end
 
   lex(code, argv[2])
+  make_ir()
 
+  unlink(argv[1])
+  let output_fd = open(argv[1], 65, 420)
+
+  gen_asm(output_fd)
+
+  close(output_fd)
   free(code)
 
   retval 0

@@ -1,0 +1,91 @@
+include "meta.mal"
+
+let stack_used: s64
+let params_stack_used: s64
+
+proc get_type_size(index: s64) -> s64
+  let kind = type_kinds[index]
+
+  if kind == 0 as s8
+    retval 0
+  elif kind == 1 as s8
+    retval 8
+  elif kind == 2 as s8
+    retval 1
+  elif kind == 3 as s8
+    retval 2
+  elif kind == 4 as s8
+    retval 4
+  elif kind == 5 as s8
+    retval 8
+  end
+
+  retval 0
+end
+
+proc alloc_regs_for_proc(index: s64)
+  let params_len = ir_proc_params_lens[index]
+  let sorted_var_indices = malloc(vars_len * sizeof s64) as &s64
+
+  let i = 0
+
+  while i < vars_len
+    sorted_var_indices[i] = i
+
+    i = i + 1
+  end
+
+  i = params_len
+
+  while i + 1 < vars_len
+    let j = 0
+
+    while j + i + 1 < vars_len
+      let a = var_uses[sorted_var_indices[j]]
+      let b = var_uses[sorted_var_indices[j + 1]]
+
+      if a < b
+        let temp = sorted_var_indices[j]
+        sorted_var_indices[j] = sorted_var_indices[j + 1]
+        sorted_var_indices[j + 1] = temp
+      end
+
+      j = j + 1
+    end
+
+    i = i + 1
+  end
+
+  let regs_used = 0
+  let regs_count = 5
+
+  stack_used = 0
+  params_stack_used = 16
+
+  i = 0
+
+  while i < params_len
+    var_indices[i] = -1
+    var_offsets[i] = params_stack_used
+    params_stack_used = params_stack_used + get_type_size(var_types[i])
+
+    i = i + 1
+  end
+
+  i = params_len
+
+  while i < vars_len
+    if (regs_used >= regs_count) | var_is_ref_targets[sorted_var_indices[i]]
+      stack_used = stack_used + get_type_size(var_types[sorted_var_indices[i]])
+      var_indices[sorted_var_indices[i]] = -1
+      var_offsets[sorted_var_indices[i]] = 0 - stack_used
+    else
+      var_indices[sorted_var_indices[i]] = regs_used
+      regs_used = regs_used + 1
+    end
+
+    i = i + 1
+  end
+
+  free(sorted_var_indices as &s8)
+end
