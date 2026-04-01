@@ -151,19 +151,23 @@ proc make_meta_for_proc(index: s64)
     end
 
     if instr_has_arg1(i)
-      let arg1 = ir_arg1s[i]
-      var_ends[arg1] = i
-      var_uses[arg1] = var_uses[arg1] + 1
+      if instr_is_arg1_var(i)
+        let arg1 = ir_arg1s[i]
+        var_ends[arg1] = i
+        var_uses[arg1] = var_uses[arg1] + 1
 
-      if ir_types[i] == 7 as s8
-        var_is_ref_targets[arg1] = 1 as s8
+        if ir_types[i] == 7 as s8
+          var_is_ref_targets[arg1] = 1 as s8
+        end
       end
     end
 
     if instr_has_arg2(i)
-      let arg2 = ir_arg2s[i]
-      var_ends[arg2] = i
-      var_uses[arg2] = var_uses[arg2] + 1
+      if instr_is_arg2_var(i)
+        let arg2 = ir_arg2s[i]
+        var_ends[arg2] = i
+        var_uses[arg2] = var_uses[arg2] + 1
+      end
     end
 
     i = i + 1

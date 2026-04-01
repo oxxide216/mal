@@ -376,8 +376,7 @@ proc make_ir_primary_expr(dest_id: s64)
 end
 
 proc make_ir_expr_mul(dest_id: s64)
-  let temp0 = alloc_var(1 as s8)
-  make_ir_primary_expr(temp0)
+  make_ir_primary_expr(dest_id)
 
   while (token_types[pos] == 10 as s8) |
         (token_types[pos] == 11 as s8) |
@@ -386,18 +385,15 @@ proc make_ir_expr_mul(dest_id: s64)
 
     pos = pos + 1
 
-    let temp1 = alloc_var(1 as s8)
-    make_ir_primary_expr(temp1)
+    let temp = alloc_var(1 as s8)
+    make_ir_primary_expr(temp)
 
-    push_ir_instr(2 as s8, temp0, op_token, temp0, temp1)
+    push_ir_instr(2 as s8, dest_id, op_token, dest_id, temp)
   end
-
-  push_ir_instr(5 as s8, dest_id, -1, temp0, 0)
 end
 
 proc make_ir_expr_add(dest_id: s64)
-  let temp0 = alloc_var(1 as s8)
-  make_ir_expr_mul(temp0)
+  make_ir_expr_mul(dest_id)
 
   while (token_types[pos] == 7 as s8) |
         (token_types[pos] == 8 as s8)
@@ -405,18 +401,15 @@ proc make_ir_expr_add(dest_id: s64)
 
     pos = pos + 1
 
-    let temp1 = alloc_var(1 as s8)
-    make_ir_expr_mul(temp1)
+    let temp = alloc_var(1 as s8)
+    make_ir_expr_mul(temp)
 
-    push_ir_instr(2 as s8, dest_id, op_token, temp0, temp1)
+    push_ir_instr(2 as s8, dest_id, op_token, dest_id, temp)
   end
-
-  push_ir_instr(5 as s8, dest_id, -1, temp0, 0)
 end
 
 proc make_ir_expr_cmp(dest_id: s64)
-  let temp0 = alloc_var(1 as s8)
-  make_ir_expr_add(temp0)
+  make_ir_expr_add(dest_id)
 
   while (token_types[pos] == 14 as s8) |
         (token_types[pos] == 15 as s8) |
@@ -428,13 +421,11 @@ proc make_ir_expr_cmp(dest_id: s64)
 
     pos = pos + 1
 
-    let temp1 = alloc_var(1 as s8)
-    make_ir_expr_add(temp1)
+    let temp = alloc_var(1 as s8)
+    make_ir_expr_add(temp)
 
-    push_ir_instr(2 as s8, dest_id, op_token, temp0, temp1)
+    push_ir_instr(2 as s8, dest_id, op_token, dest_id, temp)
   end
-
-  push_ir_instr(5 as s8, dest_id, -1, temp0, 0)
 end
 
 proc make_ir_expr(dest_id: s64)
@@ -498,9 +489,11 @@ proc make_ir_instrs()
         expect_token(mask(13))
         pos = pos + 1
 
+        let temp = alloc_var(1 as s8)
         let id = get_named_var_id(name_token)
 
-        make_ir_expr(id)
+        make_ir_expr(temp)
+        push_ir_instr(5 as s8, id, -1, temp, 0)
       end
     elif token_types[pos] == 2 as s8
       let text_token = pos
@@ -822,6 +815,15 @@ proc instr_has_arg2(index: s64) -> s8
   let type = ir_types[index]
   retval (type == 2 as s8) | (type == 8 as s8) |
          (type == 14 as s8)
+end
+
+proc instr_is_arg1_var(index: s64) -> s8
+  let type = ir_types[index]
+  retval (type != 0 as s8) & (type != 4 as s8)
+end
+
+proc instr_is_arg2_var(index: s64) -> s8
+  retval 1 as s8
 end
 
 proc print_type(index: s64)

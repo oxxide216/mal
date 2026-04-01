@@ -2,6 +2,7 @@ include "meta.mal"
 
 let stack_used: s64
 let params_stack_used: s64
+let sorted_var_indices: &s64
 
 proc get_type_size(index: s64) -> s64
   let kind = type_kinds[index]
@@ -23,9 +24,49 @@ proc get_type_size(index: s64) -> s64
   retval 0
 end
 
+proc var_collides_at_reg_index(vbegin: s64, vend: s64, index: s64, max_vars: s64) -> s8
+  let i = 0
+
+  while i < max_vars
+    let temp_vbegin = var_begins[sorted_var_indices[i]]
+    let temp_vend = var_ends[sorted_var_indices[i]]
+    let temp_vindex = var_indices[sorted_var_indices[i]]
+
+    if (temp_vindex == index) &
+       (((temp_vbegin >= vbegin) & (temp_vbegin < vend)) |
+        ((temp_vend > vbegin) & (temp_vend <= vend)) |
+        ((temp_vbegin <= vbegin) & (temp_vend >= vend)))
+      retval 1 as s8
+    end
+
+    i = i + 1
+  end
+
+  retval 0 as s8
+end
+
+proc var_get_no_collision_reg_index(vbegin: s64, vend: s64, max_vars: s64) -> s64
+  let REGS_COUNT = 5
+
+  let i = 0
+
+  while i < REGS_COUNT
+    let collides = var_collides_at_reg_index(vbegin, vend, i, max_vars)
+
+    if collides == 0 as s8
+      retval i
+    end
+
+    i = i + 1
+  end
+
+  retval -1
+end
+
 proc alloc_regs_for_proc(index: s64)
+  sorted_var_indices = malloc(vars_len * sizeof s64) as &s64
+
   let params_len = ir_proc_params_lens[index]
-  let sorted_var_indices = malloc(vars_len * sizeof s64) as &s64
 
   let i = 0
 
@@ -56,9 +97,6 @@ proc alloc_regs_for_proc(index: s64)
     i = i + 1
   end
 
-  let regs_used = 0
-  let regs_count = 5
-
   stack_used = 0
   params_stack_used = 16
 
@@ -75,13 +113,17 @@ proc alloc_regs_for_proc(index: s64)
   i = params_len
 
   while i < vars_len
-    if (regs_used >= regs_count) | var_is_ref_targets[sorted_var_indices[i]]
+    let vbegin = var_begins[sorted_var_indices[i]]
+    let vend = var_ends[sorted_var_indices[i]]
+
+    let reg_index = var_get_no_collision_reg_index(vbegin, vend, i)
+
+    if (reg_index == -1) | var_is_ref_targets[sorted_var_indices[i]]
       stack_used = stack_used + get_type_size(var_types[sorted_var_indices[i]])
       var_indices[sorted_var_indices[i]] = -1
       var_offsets[sorted_var_indices[i]] = 0 - stack_used
     else
-      var_indices[sorted_var_indices[i]] = regs_used
-      regs_used = regs_used + 1
+      var_indices[sorted_var_indices[i]] = reg_index
     end
 
     i = i + 1
