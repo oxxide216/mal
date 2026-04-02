@@ -60,7 +60,7 @@ proc reset_vars()
   end
 end
 
-proc get_proc_return_type(name: s64) -> s64
+proc get_proc_index(name: s64) -> s64
   let name_begin = token_begins[name]
   let name_end = token_ends[name]
   let name_code = token_codes[name]
@@ -75,7 +75,7 @@ proc get_proc_return_type(name: s64) -> s64
 
     if temp_end - temp_begin == name_len
       if str_n_eq(temp_code + temp_begin, name_code + name_begin, name_len)
-        retval ir_proc_return_types[i]
+        retval i
       end
     end
 
@@ -110,7 +110,7 @@ proc instr_get_dest_type(index: s64) -> s64
   elif type == 9 as s8
     retval type_targets[var_types[ir_arg1s[index]]]
   elif type == 19 as s8
-    retval get_proc_return_type(ir_arg0_tokens[index])
+    retval ir_proc_return_types[ir_arg1s[index]]
   elif type == 22 as s8
     retval ir_arg2s[index]
   end
@@ -140,6 +140,10 @@ proc make_meta_for_proc(index: s64)
   i = pbegin
 
   while i < pend
+    if (ir_types[i] == 18 as s8) | (ir_types[i] == 19 as s8)
+      ir_arg1s[i] = get_proc_index(ir_arg0_tokens[i])
+    end
+
     if instr_has_dest(i)
       let dest_id = ir_dest_ids[i]
       set_min_vars_len(dest_id + 1)

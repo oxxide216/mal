@@ -1,8 +1,14 @@
 include "meta.mal"
 
+let param_regs_total: s64
+
 let stack_used: s64
-let params_stack_used: s64
+let param_stack_used: s64
 let sorted_var_indices: &s64
+
+proc init_space_allocator()
+  param_regs_total = 6
+end
 
 proc get_type_size(index: s64) -> s64
   let kind = type_kinds[index]
@@ -32,10 +38,7 @@ proc var_collides_at_reg_index(vbegin: s64, vend: s64, index: s64, max_vars: s64
     let temp_vend = var_ends[sorted_var_indices[i]]
     let temp_vindex = var_indices[sorted_var_indices[i]]
 
-    if (temp_vindex == index) &
-       (((temp_vbegin >= vbegin) & (temp_vbegin < vend)) |
-        ((temp_vend > vbegin) & (temp_vend <= vend)) |
-        ((temp_vbegin <= vbegin) & (temp_vend >= vend)))
+    if (temp_vindex == index) & (temp_vend > vbegin) & (temp_vbegin < vend)
       retval 1 as s8
     end
 
@@ -98,14 +101,21 @@ proc alloc_regs_for_proc(index: s64)
   end
 
   stack_used = 0
-  params_stack_used = 16
+  param_stack_used = 16
 
   i = 0
 
+  let param_regs_used = 0
+
   while i < params_len
-    var_indices[i] = -1
-    var_offsets[i] = params_stack_used
-    params_stack_used = params_stack_used + get_type_size(var_types[i])
+    if param_regs_used >= param_regs_total
+      var_indices[i] = -1
+      var_offsets[i] = param_stack_used
+      param_stack_used = param_stack_used + get_type_size(var_types[i])
+    else
+      param_regs_used = param_regs_used + 1
+      var_indices[sorted_var_indices[i]] = -1 - param_regs_used
+    end
 
     i = i + 1
   end

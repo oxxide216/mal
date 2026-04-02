@@ -2,9 +2,11 @@ include "meta.mal"
 include "alloc.mal"
 
 let strs_count: s64
+let params_count: s64
 
 proc init_codegen()
   strs_count = 0
+  params_count = 0
 end
 
 proc get_type_dest_reg(index: s64) -> &s8
@@ -97,20 +99,21 @@ proc get_type_shift_reg(index: s64) -> &s8
   retval ""
 end
 
-proc print_type_prefix(fd: s64, index: s64)
-  let kind = type_kinds[index]
+proc get_proc_params_stack_size(proc_index: s64) -> s64
+  let params_len = ir_proc_params_lens[proc_index]
+  let param_types = ir_proc_param_types[proc_index]
 
-  if kind == 1 as s8
-    fprint(fd, "qword")
-  elif kind == 2 as s8
-    fprint(fd, "byte")
-  elif kind == 3 as s8
-    fprint(fd, "word")
-  elif kind == 4 as s8
-    fprint(fd, "dword")
-  elif kind == 5 as s8
-    fprint(fd, "qword")
+  let param_stack_used = 0
+
+  let i = param_regs_total
+
+  while i < params_len
+    param_stack_used = param_stack_used + get_type_size(param_types[i])
+
+    i = i + 1
   end
+
+  retval param_stack_used
 end
 
 proc print_reg_typed(fd: s64, type: s64, a: &s8, b: &s8, c: &s8, d: &s8)
@@ -129,6 +132,66 @@ proc print_reg_typed(fd: s64, type: s64, a: &s8, b: &s8, c: &s8, d: &s8)
   end
 end
 
+proc print_type_prefix(fd: s64, index: s64)
+  let kind = type_kinds[index]
+
+  if kind == 1 as s8
+    fprint(fd, "qword")
+  elif kind == 2 as s8
+    fprint(fd, "byte")
+  elif kind == 3 as s8
+    fprint(fd, "word")
+  elif kind == 4 as s8
+    fprint(fd, "dword")
+  elif kind == 5 as s8
+    fprint(fd, "qword")
+  end
+end
+
+proc print_proc_param_loc(fd: s64, proc_index: s64, param_index: s64)
+  let params_len = ir_proc_params_lens[proc_index]
+  let param_types = ir_proc_param_types[proc_index]
+  let type = param_types[param_index]
+
+  if param_index < param_regs_total
+    if param_index == 0
+      print_reg_typed(fd, type, "dil", "di", "edi", "rdi")
+    elif param_index == 1
+      print_reg_typed(fd, type, "sil", "si", "esi", "rsi")
+    elif param_index == 2
+      print_reg_typed(fd, type, "dl", "dx", "edx", "rdx")
+    elif param_index == 3
+      print_reg_typed(fd, type, "cl", "cx", "ecx", "rcx")
+    elif param_index == 4
+      print_reg_typed(fd, type, "r8b", "r8w", "r8d", "r8")
+    elif param_index == 5
+      print_reg_typed(fd, type, "r9b", "r9w", "r9d", "r9")
+    end
+  end
+
+  let param_stack_used = 0
+
+  let i = param_regs_total
+
+  while i < params_len
+    if i == param_index
+      let str = s64_to_str(param_stack_used)
+
+      print_type_prefix(fd, type)
+      fprint(fd, "[rsp+")
+      fprint(fd, str)
+      fprint(fd, "]")
+
+      free(str)
+      ret
+    end
+
+    param_stack_used = param_stack_used + get_type_size(param_types[i])
+
+    i = i + 1
+  end
+end
+
 proc print_var_loc(fd: s64, index: s64)
   let type = var_types[index]
   let reg_index = var_indices[index]
@@ -144,6 +207,18 @@ proc print_var_loc(fd: s64, index: s64)
     print_reg_typed(fd, type, "r14b", "r14w", "r14d", "r14")
   elif reg_index == 4
     print_reg_typed(fd, type, "r15b", "r15w", "r15d", "r15")
+  elif reg_index == -2
+    print_reg_typed(fd, type, "dil", "di", "edi", "rdi")
+  elif reg_index == -3
+    print_reg_typed(fd, type, "sil", "si", "esi", "rsi")
+  elif reg_index == -4
+    print_reg_typed(fd, type, "dl", "dx", "edx", "rdx")
+  elif reg_index == -5
+    print_reg_typed(fd, type, "cl", "cx", "ecx", "rcx")
+  elif reg_index == -6
+    print_reg_typed(fd, type, "r8b", "r8w", "r8d", "r8")
+  elif reg_index == -7
+    print_reg_typed(fd, type, "r9b", "r9w", "r9d", "r9")
   elif offset < 0
     let str = s64_to_str(0 - offset)
     print_type_prefix(fd, type)
@@ -623,14 +698,22 @@ proc gen_asm_instr(fd: s64, index: s64)
   elif type == 18 as s8
     let token = ir_arg0_tokens[index]
 
+    params_count = 0
+
     fprint(fd, "  call ")
     write(fd, token_codes[token] + token_begins[token],
           token_ends[token] - token_begins[token])
     fprintln(fd, "")
+    let str = s64_to_str(get_proc_params_stack_size(ir_arg1s[index]))
+    fprint(fd, "  add rsp,")
+    fprintln(fd, str)
+    free(str)
   elif type == 19 as s8
     let token = ir_arg0_tokens[index]
     let dest_id = ir_dest_ids[index]
     let ret_reg = get_type_dest_reg(var_types[dest_id])
+
+    params_count = 0
 
     fprint(fd, "  call ")
     write(fd, token_codes[token] + token_begins[token],
@@ -640,6 +723,10 @@ proc gen_asm_instr(fd: s64, index: s64)
     print_var_loc(fd, dest_id)
     fprint(fd, ",")
     fprintln(fd, ret_reg)
+    let str = s64_to_str(get_proc_params_stack_size(ir_arg1s[index]))
+    fprint(fd, "  add rsp,")
+    fprintln(fd, str)
+    free(str)
   elif type == 20 as s8
     let arg0_id = ir_arg1s[index]
     let arg1_id = ir_arg2s[index]
@@ -785,7 +872,28 @@ proc gen_asm_instr(fd: s64, index: s64)
       fprintln(fd, "")
     end
   elif type == 23 as s8
-    fprintln(fd, "  ; TODO: PARAM codegen")
+    let i = index + 1
+
+    while (ir_types[i] != 18 as s8) & (ir_types[i] != 19 as s8)
+      i = i + 1
+    end
+
+    if params_count == 0
+      let str = s64_to_str(get_proc_params_stack_size(ir_arg1s[i]))
+
+      fprint(fd, "  sub rsp,")
+      fprintln(fd, str)
+
+      free(str)
+    end
+
+    fprint(fd, "  mov ")
+    print_proc_param_loc(fd, ir_arg1s[i], params_count)
+    fprint(fd, ",")
+    print_var_loc(fd, ir_arg1s[index])
+    fprintln(fd, "")
+
+    params_count = params_count + 1
   end
 end
 
