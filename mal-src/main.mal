@@ -39,7 +39,6 @@ proc main(argc: s64, argv: &&s8) -> s64
   gen_asm(output_fd)
 
   close(output_fd)
-  free(code)
 
   retval 0
 end

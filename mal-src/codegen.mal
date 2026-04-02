@@ -25,19 +25,37 @@ proc get_type_dest_reg(index: s64) -> &s8
   retval ""
 end
 
-proc get_type_temp_reg(index: s64) -> &s8
+proc get_type_temp0_reg(index: s64) -> &s8
   let kind = type_kinds[index]
 
   if kind == 1 as s8
-    retval "rbx"
+    retval "r10"
   elif kind == 2 as s8
-    retval "bl"
+    retval "r10b"
   elif kind == 3 as s8
-    retval "bx"
+    retval "r10w"
   elif kind == 4 as s8
-    retval "ebx"
+    retval "r10d"
   elif kind == 5 as s8
-    retval "rbx"
+    retval "r10"
+  end
+
+  retval ""
+end
+
+proc get_type_temp1_reg(index: s64) -> &s8
+  let kind = type_kinds[index]
+
+  if kind == 1 as s8
+    retval "r11"
+  elif kind == 2 as s8
+    retval "r11b"
+  elif kind == 3 as s8
+    retval "r11w"
+  elif kind == 4 as s8
+    retval "r11d"
+  elif kind == 5 as s8
+    retval "r11"
   end
 
   retval ""
@@ -119,7 +137,7 @@ proc print_str_bytes(fd: s64, token: s64)
       fprint(fd, ",")
     end
 
-    let str = s64_to_str(code[token_begins[token] + i] as s32 as s64)
+    let str = s64_to_str(token_codes[token][token_begins[token] + i] as s32 as s64)
     fprint(fd, str)
     free(str)
 
@@ -173,6 +191,7 @@ end
 proc print_op_cmp(fd: s64, op_token: s64, dest: s64, lhs: s64, rhs: s64) -> s8
   let tbegin = token_begins[op_token]
   let tend = token_ends[op_token]
+  let tcode = token_codes[op_token]
   let ret_reg = get_type_dest_reg(var_types[dest])
 
   if (var_indices[lhs] == -1) & (var_indices[rhs] == -1)
@@ -199,42 +218,42 @@ proc print_op_cmp(fd: s64, op_token: s64, dest: s64, lhs: s64, rhs: s64) -> s8
   fprint(fd, ",")
   fprintln(fd, "1")
 
-  if str_n_eq(code + tbegin, "==", 2)
+  if str_n_eq(tcode + tbegin, "==", 2)
     fprint(fd, "  cmove ")
     print_var_loc(fd, dest)
     fprint(fd, ",")
     fprintln(fd, ret_reg)
 
     retval 1 as s8
-  elif str_n_eq(code + tbegin, "!=", 2)
+  elif str_n_eq(tcode + tbegin, "!=", 2)
     fprint(fd, "  cmovne ")
     print_var_loc(fd, dest)
     fprint(fd, ",")
     fprintln(fd, ret_reg)
 
     retval 1 as s8
-  elif str_n_eq(code + tbegin, "<=", 2)
+  elif str_n_eq(tcode + tbegin, "<=", 2)
     fprint(fd, "  cmovle ")
     print_var_loc(fd, dest)
     fprint(fd, ",")
     fprintln(fd, ret_reg)
 
     retval 1 as s8
-  elif str_n_eq(code + tbegin, "<", 1)
+  elif str_n_eq(tcode + tbegin, "<", 1)
     fprint(fd, "  cmovl ")
     print_var_loc(fd, dest)
     fprint(fd, ",")
     fprintln(fd, ret_reg)
 
     retval 1 as s8
-  elif str_n_eq(code + tbegin, ">=", 2)
+  elif str_n_eq(tcode + tbegin, ">=", 2)
     fprint(fd, "  cmovge ")
     print_var_loc(fd, dest)
     fprint(fd, ",")
     fprintln(fd, ret_reg)
 
     retval 1 as s8
-  elif str_n_eq(code + tbegin, ">", 2)
+  elif str_n_eq(tcode + tbegin, ">", 2)
     fprint(fd, "  cmovg ")
     print_var_loc(fd, dest)
     fprint(fd, ",")
@@ -249,10 +268,11 @@ end
 proc print_op(fd: s64, op_token: s64, dest: s64, lhs: s64, rhs: s64)
   let tbegin = token_begins[op_token]
   let tend = token_ends[op_token]
+  let tcode = token_codes[op_token]
   let ret_reg = get_type_dest_reg(var_types[dest])
   let rem_reg = get_type_rem_reg(var_types[dest])
 
-  if str_n_eq(code + tbegin, "+", 1)
+  if str_n_eq(tcode + tbegin, "+", 1)
     if dest != lhs
       print_move(fd, dest, lhs)
     end
@@ -272,7 +292,7 @@ proc print_op(fd: s64, op_token: s64, dest: s64, lhs: s64, rhs: s64)
       print_var_loc(fd, rhs)
     end
     fprintln(fd, "")
-  elif str_n_eq(code + tbegin, "-", 1)
+  elif str_n_eq(tcode + tbegin, "-", 1)
     if dest != lhs
       print_move(fd, dest, lhs)
     end
@@ -292,7 +312,7 @@ proc print_op(fd: s64, op_token: s64, dest: s64, lhs: s64, rhs: s64)
       print_var_loc(fd, rhs)
     end
     fprintln(fd, "")
-  elif str_n_eq(code + tbegin, "*", 1)
+  elif str_n_eq(tcode + tbegin, "*", 1)
     fprint(fd, "  mov ")
     fprint(fd, ret_reg)
     fprint(fd, ",")
@@ -306,7 +326,7 @@ proc print_op(fd: s64, op_token: s64, dest: s64, lhs: s64, rhs: s64)
     fprint(fd, ",")
     fprint(fd, ret_reg)
     fprintln(fd, "")
-  elif str_n_eq(code + tbegin, "/", 1)
+  elif str_n_eq(tcode + tbegin, "/", 1)
     fprint(fd, "  mov ")
     fprint(fd, ret_reg)
     fprint(fd, ",")
@@ -321,7 +341,7 @@ proc print_op(fd: s64, op_token: s64, dest: s64, lhs: s64, rhs: s64)
     fprint(fd, ",")
     fprint(fd, ret_reg)
     fprintln(fd, "")
-  elif str_n_eq(code + tbegin, "%", 1)
+  elif str_n_eq(tcode + tbegin, "%", 1)
     fprint(fd, "  mov ")
     fprint(fd, ret_reg)
     fprint(fd, ",")
@@ -338,7 +358,7 @@ proc print_op(fd: s64, op_token: s64, dest: s64, lhs: s64, rhs: s64)
     fprintln(fd, "")
   elif print_op_cmp(fd, op_token, dest, lhs, rhs) == 0 as s8
     error("Unknown op: `")
-    write(2, code + tbegin, tend - tbegin)
+    write(2, tcode + tbegin, tend - tbegin)
     fprintln(2, "`")
     exit(1)
   end
@@ -356,7 +376,7 @@ proc gen_asm_instr(fd: s64, index: s64)
     fprint(fd, "  mov ")
     print_var_loc(fd, ir_dest_ids[index])
     fprint(fd, ",")
-    write(fd, code + token_begins[token],
+    write(fd, token_codes[token] + token_begins[token],
           token_ends[token] - token_begins[token])
     fprintln(fd, "")
   elif type == 4 as s8
@@ -433,7 +453,7 @@ proc gen_asm_instr(fd: s64, index: s64)
     let arg0_id = ir_arg1s[index]
     let arg1_id = ir_arg2s[index]
     let ret_reg = get_type_dest_reg(var_types[arg0_id])
-    let temp_reg = get_type_temp_reg(var_types[arg1_id])
+    let temp_reg = get_type_temp0_reg(var_types[arg1_id])
 
     if var_indices[arg0_id] == -1
       fprint(fd, "  mov ")
@@ -502,7 +522,7 @@ proc gen_asm_instr(fd: s64, index: s64)
     if token == -1
       print_var_loc(fd, ir_arg1s[index])
     else
-      write(fd, code + token_begins[token] + 1,
+      write(fd, token_codes[token] + token_begins[token] + 1,
             token_ends[token] - token_begins[token] - 2)
     end
   elif type == 12 as s8
@@ -549,7 +569,7 @@ proc gen_asm_instr(fd: s64, index: s64)
     let token = ir_arg0_tokens[index]
 
     fprint(fd, "  call ")
-    write(fd, code + token_begins[token],
+    write(fd, token_codes[token] + token_begins[token],
           token_ends[token] - token_begins[token])
     fprintln(fd, "")
   elif type == 19 as s8
@@ -558,13 +578,116 @@ proc gen_asm_instr(fd: s64, index: s64)
     let ret_reg = get_type_dest_reg(var_types[dest_id])
 
     fprint(fd, "  call ")
-    write(fd, code + token_begins[token],
+    write(fd, token_codes[token] + token_begins[token],
           token_ends[token] - token_begins[token])
     fprintln(fd, "")
     fprint(fd, "  mov ")
     print_var_loc(fd, dest_id)
     fprint(fd, ",")
     fprintln(fd, ret_reg)
+  elif type == 20 as s8
+    let arg0_id = ir_arg1s[index]
+    let arg1_id = ir_arg2s[index]
+    let arg2_id = ir_arg3s[index]
+    let ret_reg = get_type_dest_reg(var_types[arg0_id])
+    let temp0_reg = get_type_temp0_reg(var_types[arg1_id])
+    let temp1_reg = get_type_temp1_reg(var_types[arg2_id])
+
+    if var_indices[arg0_id] == -1
+      fprint(fd, "  mov ")
+      fprint(fd, ret_reg)
+      fprint(fd, ",")
+      print_var_loc(fd, arg0_id)
+      fprintln(fd, "")
+    end
+    if var_indices[arg1_id] == -1
+      fprint(fd, "  mov ")
+      fprint(fd, temp0_reg)
+      fprint(fd, ",")
+      print_var_loc(fd, arg1_id)
+      fprintln(fd, "")
+    end
+    if var_indices[arg2_id] == -1
+      fprint(fd, "  mov ")
+      fprint(fd, temp1_reg)
+      fprint(fd, ",")
+      print_var_loc(fd, arg2_id)
+      fprintln(fd, "")
+    end
+    fprint(fd, "  mov [")
+    if var_indices[arg0_id] == -1
+      fprint(fd, ret_reg)
+    else
+      print_var_loc(fd, arg0_id)
+    end
+    fprint(fd, "+")
+    if var_indices[arg1_id] == -1
+      fprint(fd, temp0_reg)
+    else
+      print_var_loc(fd, arg1_id)
+    end
+    fprint(fd, "*")
+    let str = s64_to_str(get_type_size(arg2_id))
+    fprint(fd, str)
+    free(str)
+    fprint(fd, "],")
+    if var_indices[arg2_id] == -1
+      fprint(fd, temp1_reg)
+    else
+      print_var_loc(fd, arg2_id)
+    end
+    fprintln(fd, "")
+  elif type == 21 as s8
+    let dest_id = ir_dest_ids[index]
+    let arg0_id = ir_arg1s[index]
+    let arg1_id = ir_arg2s[index]
+    let ret_reg = get_type_dest_reg(var_types[arg0_id])
+    let temp_reg = get_type_temp0_reg(var_types[arg1_id])
+
+    if var_indices[arg0_id] == -1
+      fprint(fd, "  mov ")
+      fprint(fd, ret_reg)
+      fprint(fd, ",")
+      print_var_loc(fd, arg0_id)
+      fprintln(fd, "")
+    end
+    if var_indices[arg1_id] == -1
+      fprint(fd, "  mov ")
+      fprint(fd, temp_reg)
+      fprint(fd, ",")
+      print_var_loc(fd, arg1_id)
+      fprintln(fd, "")
+    end
+    fprint(fd, "  mov ")
+    if var_indices[dest_id] == -1
+      fprint(fd, ret_reg)
+    else
+      print_var_loc(fd, dest_id)
+    end
+    fprint(fd, ",[")
+    if var_indices[arg0_id] == -1
+      fprint(fd, ret_reg)
+    else
+      print_var_loc(fd, arg0_id)
+    end
+    fprint(fd, "+")
+    if var_indices[arg1_id] == -1
+      fprint(fd, temp_reg)
+    else
+      print_var_loc(fd, arg1_id)
+    end
+    fprint(fd, "*")
+    let str = s64_to_str(get_type_size(arg1_id))
+    fprint(fd, str)
+    free(str)
+    fprintln(fd, "]")
+    if var_indices[dest_id] == -1
+      fprint(fd, "  mov ")
+      print_var_loc(fd, dest_id)
+      fprint(fd, ",")
+      fprint(fd, ret_reg)
+      fprintln(fd, "")
+    end
   end
 end
 
@@ -591,7 +714,7 @@ proc gen_asm(fd: s64)
       dump_proc_ir(i)
 
       fprint(fd, "\nextern $")
-      write(fd, code + token_begins[pname_token],
+      write(fd, token_codes[pname_token] + token_begins[pname_token],
             token_ends[pname_token] - token_begins[pname_token])
       fprintln(fd, "")
     else
@@ -601,7 +724,7 @@ proc gen_asm(fd: s64)
       dump_proc_ir(i)
 
       fprint(fd, "\n$")
-      write(fd, code + token_begins[pname_token],
+      write(fd, token_codes[pname_token] + token_begins[pname_token],
             token_ends[pname_token] - token_begins[pname_token])
       fprintln(fd, ":")
 

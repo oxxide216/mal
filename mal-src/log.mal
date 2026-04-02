@@ -4,3 +4,27 @@ proc error(str: &s8)
   fprint(2, "\e[31;1m[ERROR]\e[0m ")
   fprint(2, str)
 end
+
+# Parsing error
+proc perror(path: &s8, row: s64, col: s64, str: &s8)
+  let row_str = s64_to_str(row)
+  let col_str = s64_to_str(col)
+
+  fprint(2, path)
+  fprint(2, ":")
+  fprint(2, row_str)
+  fprint(2, ":")
+  fprint(2, col_str)
+  fprint(2, ": \e[31;1m[ERROR]\e[0m ")
+  fprint(2, str)
+
+  free(row_str)
+  free(col_str)
+end
+
+# Parsing error with path only
+proc ppoerror(path: &s8, str: &s8)
+  fprint(2, path)
+  fprint(2, ": \e[31;1m[ERROR]\e[0m ")
+  fprint(2, str)
+end

@@ -1,9 +1,14 @@
 include "../std/io.mal"
 
-let code: &s8
+include "log.mal"
+
 let token_begins: &s64
 let token_ends: &s64
 let token_types: &s8
+let token_codes: &&s8
+let token_paths: &&s8
+let token_rows: &s64
+let token_cols: &s64
 let tokens_len: s64
 let tokens_cap: s64
 
@@ -12,40 +17,36 @@ proc init_lexer()
   tokens_cap = 0
 end
 
-proc lerror(path: &s8, row: s64, col: s64, str: &s8)
-  let row_str = s64_to_str(row)
-  let col_str = s64_to_str(col)
-
-  fprint(2, path)
-  fprint(2, ":")
-  fprint(2, row_str)
-  fprint(2, ":")
-  fprint(2, col_str)
-  fprint(2, ": \e[31;1m[ERROR]\e[0m ")
-  fprint(2, str)
-
-  free(row_str)
-  free(col_str)
-end
-
-proc push_token(tbegin: s64, tend: s64, ttype: s8)
+proc push_token(tbegin: s64, tend: s64, ttype: s8, code: &s8, path: &s8, row: s64, col: s64)
   if tokens_cap <= tokens_len
     if tokens_cap == 0
       tokens_cap = 10
-      token_begins = malloc(tokens_cap * sizeof s64)
-      token_ends = malloc(tokens_cap * sizeof s64)
+      token_begins = malloc(tokens_cap * sizeof s64) as &s64
+      token_ends = malloc(tokens_cap * sizeof s64) as &s64
       token_types = malloc(tokens_cap * sizeof s8)
+      token_codes = malloc(tokens_cap * sizeof &s8) as &&s8
+      token_paths = malloc(tokens_cap * sizeof &s8) as &&s8
+      token_rows = malloc(tokens_cap * sizeof s64) as &s64
+      token_cols = malloc(tokens_cap * sizeof s64) as &s64
     else
       tokens_cap = tokens_cap * 2
       token_begins = realloc(token_begins as &s8, tokens_cap * sizeof s64) as &s64
       token_ends = realloc(token_ends as &s8, tokens_cap * sizeof s64) as &s64
       token_types = realloc(token_types, tokens_cap * sizeof s8)
+      token_codes = realloc(token_codes as &s8, tokens_cap * sizeof &s8) as &&s8
+      token_paths = realloc(token_paths as &s8, tokens_cap * sizeof &s8) as &&s8
+      token_rows = realloc(token_rows as &s8, tokens_cap * sizeof s64) as &s64
+      token_cols = realloc(token_cols as &s8, tokens_cap * sizeof s64) as &s64
     end
   end
 
   token_begins[tokens_len] = tbegin
   token_ends[tokens_len] = tend
   token_types[tokens_len] = ttype
+  token_codes[tokens_len] = code
+  token_paths[tokens_len] = path
+  token_rows[tokens_len] = row
+  token_cols[tokens_len] = col
   tokens_len = tokens_len + 1
 end
 
@@ -93,19 +94,35 @@ proc get_ident_token_type(code: &s8, tbegin: s64, tend: s64) -> s8
   retval 0 as s8
 end
 
-proc lex(_code: &s8, path: &s8)
-  code = _code
+proc get_dir_len(path: &s8) -> s64
+  let i = str_len(path)
 
+  while (i > 0) & (path[i - 1] != '/')
+    i = i - 1
+  end
+
+  retval i
+end
+
+proc lex(code: &s8, path: &s8)
   let len = str_len(code)
   let i = 0
   let row = 1
   let col = 1
 
+  let prev_is_include = 0 as s8
+
   while i < len
+    let found_include = 0 as s8
+    let is_space = 0 as s8
+
     if is_space(code[i])
       i = i + 1
       col = col + 1
+      is_space = 1 as s8
     elif is_alpha(code[i]) | (code[i] == '_')
+      let prow = row
+      let pcol = col
       let tbegin = i
 
       i = i + 1
@@ -118,8 +135,14 @@ proc lex(_code: &s8, path: &s8)
 
       let ttype = get_ident_token_type(code, tbegin, i)
 
-      push_token(tbegin, i, ttype)
+      if ttype == 75 as s8
+        found_include = 1 as s8
+      else
+        push_token(tbegin, i, ttype, code, path, prow, pcol)
+      end
     elif is_digit(code[i])
+      let prow = row
+      let pcol = col
       let tbegin = i
 
       i = i + 1
@@ -130,11 +153,11 @@ proc lex(_code: &s8, path: &s8)
         col = col + 1
       end
 
-      push_token(tbegin, i, 1 as s8)
+      push_token(tbegin, i, 1 as s8, code, path, prow, pcol)
     elif code[i] == '"'
-      let tbegin = i
       let prow = row
       let pcol = col
+      let tbegin = i
       let is_escaped = 0 as s8
 
       i = i + 1
@@ -158,24 +181,24 @@ proc lex(_code: &s8, path: &s8)
       end
 
       if code[i] != '"'
-        lerror(path, prow, pcol, "String literal was not closed\n")
+        perror(path, prow, pcol, "String literal was not closed\n")
         exit(1)
       end
 
       i = i + 1
       col = col + 1
 
-      push_token(tbegin, i, 2 as s8)
+      push_token(tbegin, i, 2 as s8, code, path, prow, pcol)
     elif code[i] == '''
-      let tbegin = i
       let prow = row
       let pcol = col
+      let tbegin = i
 
       i = i + 1
       col = col + 1
 
       if (len - i < 2) | ((code[i] == '\\') & (len - i < 3))
-        lerror(path, prow, pcol, "Character literal was not closed\n")
+        perror(path, prow, pcol, "Character literal was not closed\n")
         exit(1)
       end
 
@@ -203,113 +226,121 @@ proc lex(_code: &s8, path: &s8)
       end
 
       if (i >= len) | (code[i] != ''')
-        lerror(path, prow, pcol, "Character literal was not closed\n")
+        perror(path, prow, pcol, "Character literal was not closed\n")
         exit(1)
       end
 
       i = i + 1
       col = col + 1
 
-      push_token(tbegin, i, 3 as s8)
+      push_token(tbegin, i, 3 as s8, code, path, prow, pcol)
     elif code[i] == '('
-      push_token(i, i + 1, 4 as s8)
+      push_token(i, i + 1, 4 as s8, code, path, row, col)
       i = i + 1
       col = col + 1
     elif code[i] == ')'
-      push_token(i, i + 1, 5 as s8)
+      push_token(i, i + 1, 5 as s8, code, path, row, col)
       i = i + 1
       col = col + 1
     elif code[i] == '+'
-      push_token(i, i + 1, 7 as s8)
+      push_token(i, i + 1, 7 as s8, code, path, row, col)
       i = i + 1
       col = col + 1
     elif code[i] == '-'
       if code[i + 1] == '>'
-        push_token(i, i + 2, 9 as s8)
+        push_token(i, i + 2, 9 as s8, code, path, row, col)
         i = i + 2
         col = col + 2
       else
-        push_token(i, i + 1, 8 as s8)
+        push_token(i, i + 1, 8 as s8, code, path, row, col)
         i = i + 1
         col = col + 1
       end
     elif code[i] == '*'
-      push_token(i, i + 1, 10 as s8)
+      push_token(i, i + 1, 10 as s8, code, path, row, col)
       i = i + 1
       col = col + 1
     elif code[i] == '/'
-      push_token(i, i + 1, 11 as s8)
+      push_token(i, i + 1, 11 as s8, code, path, row, col)
       i = i + 1
       col = col + 1
     elif code[i] == '%'
-      push_token(i, i + 1, 12 as s8)
+      push_token(i, i + 1, 12 as s8, code, path, row, col)
       i = i + 1
       col = col + 1
     elif code[i] == '='
       if code[i + 1] == '='
-        push_token(i, i + 2, 14 as s8)
+        push_token(i, i + 2, 14 as s8, code, path, row, col)
         i = i + 2
         col = col + 2
       else
-        push_token(i, i + 1, 13 as s8)
+        push_token(i, i + 1, 13 as s8, code, path, row, col)
         i = i + 1
         col = col + 1
       end
     elif code[i] == '!'
       if code[i + 1] == '='
-        push_token(i, i + 2, 15 as s8)
+        push_token(i, i + 2, 15 as s8, code, path, row, col)
         i = i + 2
         col = col + 2
       else
-        lerror(path, row, col, "Unexpected `")
+        perror(path, row, col, "Unexpected `")
         write(1, code + i + 1, 1)
         fprint(2, "`\n")
         exit(1)
       end
     elif code[i] == '<'
       if code[i + 1] == '='
-        push_token(i, i + 2, 17 as s8)
+        push_token(i, i + 2, 17 as s8, code, path, row, col)
         i = i + 2
         col = col + 2
       else
-        push_token(i, i + 1, 16 as s8)
+        push_token(i, i + 1, 16 as s8, code, path, row, col)
         i = i + 1
         col = col + 1
       end
     elif code[i] == '>'
       if code[i + 1] == '='
-        push_token(i, i + 2, 19 as s8)
+        push_token(i, i + 2, 19 as s8, code, path, row, col)
         i = i + 2
         col = col + 2
       else
-        push_token(i, i + 1, 18 as s8)
+        push_token(i, i + 1, 18 as s8, code, path, row, col)
         i = i + 1
         col = col + 1
       end
     elif code[i] == '&'
-      push_token(i, i + 1, 20 as s8)
+      push_token(i, i + 1, 20 as s8, code, path, row, col)
       i = i + 1
       col = col + 1
     elif code[i] == '|'
-      push_token(i, i + 1, 21 as s8)
+      push_token(i, i + 1, 21 as s8, code, path, row, col)
       i = i + 1
       col = col + 1
     elif code[i] == '^'
-      push_token(i, i + 1, 22 as s8)
+      push_token(i, i + 1, 22 as s8, code, path, row, col)
       i = i + 1
       col = col + 1
     elif code[i] == ':'
       if code[i + 1] == '='
-        push_token(i, i + 2, 24 as s8)
+        push_token(i, i + 2, 24 as s8, code, path, row, col)
         i = i + 2
         col = col + 2
       else
-        push_token(i, i + 1, 23 as s8)
+        push_token(i, i + 1, 23 as s8, code, path, row, col)
         i = i + 1
         col = col + 1
       end
     elif code[i] == ','
-      push_token(i, i + 1, 25 as s8)
+      push_token(i, i + 1, 25 as s8, code, path, row, col)
+      i = i + 1
+      col = col + 1
+    elif code[i] == '['
+      push_token(i, i + 1, 26 as s8, code, path, row, col)
+      i = i + 1
+      col = col + 1
+    elif code[i] == ']'
+      push_token(i, i + 1, 27 as s8, code, path, row, col)
       i = i + 1
       col = col + 1
     elif code[i] == '#'
@@ -321,10 +352,43 @@ proc lex(_code: &s8, path: &s8)
       row = row + 1
       col = 1
     else
-      lerror(path, row, col, "Unexpected `")
+      perror(path, row, col, "Unexpected `")
       write(2, code + i, 1)
       fprint(2, "`\n")
       exit(1)
+    end
+
+    if prev_is_include & (is_space == 0 as s8)
+      let last = tokens_len - 1
+      if token_types[last] != 2 as s8
+        perror(path, row, col, "Unexpected token: `")
+        write(2, token_codes[last] + token_begins[last],
+              token_ends[last] - token_begins[last])
+        fprintln(2, "`")
+        exit(1)
+      end
+
+      tokens_len = last
+
+      let prefix_len = get_dir_len(path)
+      let new_path_len = token_ends[last] - token_begins[last] - 2
+      let new_path = malloc(prefix_len + new_path_len + 1)
+      memcopy(new_path, path, prefix_len)
+      memcopy(new_path + prefix_len, token_codes[last] + token_begins[last] + 1, new_path_len)
+      new_path[prefix_len + new_path_len] = 0 as s8
+
+      let new_code = read_file(new_path)
+      if new_code == 0 as &s8
+        perror(path, row, col, "Could not open ")
+        fprintln(2, new_path)
+        exit(1)
+      end
+
+      lex(new_code, new_path)
+    end
+
+    if is_space == 0 as s8
+      prev_is_include = found_include
     end
   end
 end
@@ -335,11 +399,12 @@ proc dump_tokens()
   while i < tokens_len
     let tbegin = token_begins[i]
     let tend = token_ends[i]
+    let tcode = token_codes[i]
     let ttype = s64_to_str(token_types[i] as s32 as s64)
 
     print(ttype)
     print(": ")
-    write(1, code + tbegin, tend - tbegin)
+    write(1, tcode + tbegin, tend - tbegin)
     println("")
 
     free(ttype)

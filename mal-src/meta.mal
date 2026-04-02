@@ -63,6 +63,7 @@ end
 proc get_proc_return_type(name: s64) -> s64
   let name_begin = token_begins[name]
   let name_end = token_ends[name]
+  let name_code = token_codes[name]
   let name_len = name_end - name_begin
 
   let i = 0
@@ -70,9 +71,10 @@ proc get_proc_return_type(name: s64) -> s64
   while i < ir_procs_len
     let temp_begin = token_begins[ir_proc_name_tokens[i]]
     let temp_end = token_ends[ir_proc_name_tokens[i]]
+    let temp_code = token_codes[ir_proc_name_tokens[i]]
 
     if temp_end - temp_begin == name_len
-      if str_n_eq(code + temp_begin, code + name_begin, name_len)
+      if str_n_eq(temp_code + temp_begin, name_code + name_begin, name_len)
         retval ir_proc_return_types[i]
       end
     end
@@ -167,6 +169,14 @@ proc make_meta_for_proc(index: s64)
         let arg2 = ir_arg2s[i]
         var_ends[arg2] = i
         var_uses[arg2] = var_uses[arg2] + 1
+      end
+    end
+
+    if instr_has_arg3(i)
+      if instr_is_arg3_var(i)
+        let arg3 = ir_arg3s[i]
+        var_ends[arg3] = i
+        var_uses[arg3] = var_uses[arg3] + 1
       end
     end
 
