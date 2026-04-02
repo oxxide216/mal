@@ -79,6 +79,24 @@ proc get_type_rem_reg(index: s64) -> &s8
   retval ""
 end
 
+proc get_type_shift_reg(index: s64) -> &s8
+  let kind = type_kinds[index]
+
+  if kind == 1 as s8
+    retval "rcx"
+  elif kind == 2 as s8
+    retval "cl"
+  elif kind == 3 as s8
+    retval "cx"
+  elif kind == 4 as s8
+    retval "ecx"
+  elif kind == 5 as s8
+    retval "rcx"
+  end
+
+  retval ""
+end
+
 proc print_type_prefix(fd: s64, index: s64)
   let kind = type_kinds[index]
 
@@ -128,9 +146,9 @@ proc print_var_loc(fd: s64, index: s64)
 end
 
 proc print_str_bytes(fd: s64, token: s64)
-  let len = token_ends[token] - token_begins[token]
+  let len = token_ends[token] - token_begins[token] - 1
   let chars_emitted = 0
-  let i = 0
+  let i = 1
 
   while i < len
     if chars_emitted > 0
@@ -188,6 +206,50 @@ proc print_type_sign_extend(fd: s64, index: s64)
   end
 end
 
+proc print_simple_op(fd: s64, instr: &s8, dest: s64, lhs: s64, rhs: s64)
+  let ret_reg = get_type_dest_reg(var_types[dest])
+
+  if dest != lhs
+    print_move(fd, dest, lhs)
+  end
+  if (var_indices[dest] == -1) & (var_indices[rhs] == -1)
+    fprint(fd, "  mov ")
+    fprint(fd, ret_reg)
+    fprint(fd, ",")
+    print_var_loc(fd, rhs)
+    fprintln(fd, "")
+  end
+  fprint(fd, "  ")
+  fprint(fd, instr)
+  fprint(fd, " ")
+  print_var_loc(fd, dest)
+  fprint(fd, ",")
+  if (var_indices[dest] == -1) & (var_indices[rhs] == -1)
+    fprint(fd, ret_reg)
+  else
+    print_var_loc(fd, rhs)
+  end
+  fprintln(fd, "")
+end
+
+proc print_shift_op(fd: s64, instr: &s8, dest: s64, lhs: s64, rhs: s64)
+  let shift_reg = get_type_shift_reg(var_types[dest])
+
+  if dest != lhs
+    print_move(fd, dest, lhs)
+  end
+  fprint(fd, "  mov ")
+  fprint(fd, shift_reg)
+  fprint(fd, ",")
+  print_var_loc(fd, rhs)
+  fprintln(fd, "")
+  fprint(fd, "  ")
+  fprint(fd, instr)
+  fprint(fd, " ")
+  print_var_loc(fd, dest)
+  fprintln(fd, ",cl")
+end
+
 proc print_op_cmp(fd: s64, op_token: s64, dest: s64, lhs: s64, rhs: s64) -> s8
   let tbegin = token_begins[op_token]
   let tend = token_ends[op_token]
@@ -218,42 +280,42 @@ proc print_op_cmp(fd: s64, op_token: s64, dest: s64, lhs: s64, rhs: s64) -> s8
   fprint(fd, ",")
   fprintln(fd, "1")
 
-  if str_n_eq(tcode + tbegin, "==", 2)
+  if (tend - tbegin == 2) & str_n_eq(tcode + tbegin, "==", 2)
     fprint(fd, "  cmove ")
     print_var_loc(fd, dest)
     fprint(fd, ",")
     fprintln(fd, ret_reg)
 
     retval 1 as s8
-  elif str_n_eq(tcode + tbegin, "!=", 2)
+  elif (tend - tbegin == 2) & str_n_eq(tcode + tbegin, "!=", 2)
     fprint(fd, "  cmovne ")
     print_var_loc(fd, dest)
     fprint(fd, ",")
     fprintln(fd, ret_reg)
 
     retval 1 as s8
-  elif str_n_eq(tcode + tbegin, "<=", 2)
+  elif (tend - tbegin == 2) & str_n_eq(tcode + tbegin, "<=", 2)
     fprint(fd, "  cmovle ")
     print_var_loc(fd, dest)
     fprint(fd, ",")
     fprintln(fd, ret_reg)
 
     retval 1 as s8
-  elif str_n_eq(tcode + tbegin, "<", 1)
+  elif (tend - tbegin == 1) & str_n_eq(tcode + tbegin, "<", 1)
     fprint(fd, "  cmovl ")
     print_var_loc(fd, dest)
     fprint(fd, ",")
     fprintln(fd, ret_reg)
 
     retval 1 as s8
-  elif str_n_eq(tcode + tbegin, ">=", 2)
+  elif (tend - tbegin == 2) & str_n_eq(tcode + tbegin, ">=", 2)
     fprint(fd, "  cmovge ")
     print_var_loc(fd, dest)
     fprint(fd, ",")
     fprintln(fd, ret_reg)
 
     retval 1 as s8
-  elif str_n_eq(tcode + tbegin, ">", 2)
+  elif (tend - tbegin == 1) & str_n_eq(tcode + tbegin, ">", 1)
     fprint(fd, "  cmovg ")
     print_var_loc(fd, dest)
     fprint(fd, ",")
@@ -269,49 +331,16 @@ proc print_op(fd: s64, op_token: s64, dest: s64, lhs: s64, rhs: s64)
   let tbegin = token_begins[op_token]
   let tend = token_ends[op_token]
   let tcode = token_codes[op_token]
+  let tpath = token_paths[op_token]
+  let trow = token_rows[op_token]
+  let tcol = token_cols[op_token]
   let ret_reg = get_type_dest_reg(var_types[dest])
   let rem_reg = get_type_rem_reg(var_types[dest])
 
   if str_n_eq(tcode + tbegin, "+", 1)
-    if dest != lhs
-      print_move(fd, dest, lhs)
-    end
-    if (var_indices[dest] == -1) & (var_indices[rhs] == -1)
-      fprint(fd, "  mov ")
-      fprint(fd, ret_reg)
-      fprint(fd, ",")
-      print_var_loc(fd, rhs)
-      fprintln(fd, "")
-    end
-    fprint(fd, "  add ")
-    print_var_loc(fd, dest)
-    fprint(fd, ",")
-    if (var_indices[dest] == -1) & (var_indices[rhs] == -1)
-      fprint(fd, ret_reg)
-    else
-      print_var_loc(fd, rhs)
-    end
-    fprintln(fd, "")
+    print_simple_op(fd, "add", dest, lhs, rhs)
   elif str_n_eq(tcode + tbegin, "-", 1)
-    if dest != lhs
-      print_move(fd, dest, lhs)
-    end
-    if (var_indices[dest] == -1) & (var_indices[rhs] == -1)
-      fprint(fd, "  mov ")
-      fprint(fd, ret_reg)
-      fprint(fd, ",")
-      print_var_loc(fd, rhs)
-      fprintln(fd, "")
-    end
-    fprint(fd, "  sub ")
-    print_var_loc(fd, dest)
-    fprint(fd, ",")
-    if (var_indices[dest] == -1) & (var_indices[rhs] == -1)
-      fprint(fd, ret_reg)
-    else
-      print_var_loc(fd, rhs)
-    end
-    fprintln(fd, "")
+    print_simple_op(fd, "sub", dest, lhs, rhs)
   elif str_n_eq(tcode + tbegin, "*", 1)
     fprint(fd, "  mov ")
     fprint(fd, ret_reg)
@@ -356,8 +385,18 @@ proc print_op(fd: s64, op_token: s64, dest: s64, lhs: s64, rhs: s64)
     fprint(fd, ",")
     fprint(fd, rem_reg)
     fprintln(fd, "")
+  elif str_n_eq(tcode + tbegin, "&", 1)
+    print_simple_op(fd, "and", dest, lhs, rhs)
+  elif str_n_eq(tcode + tbegin, "|", 1)
+    print_simple_op(fd, "or", dest, lhs, rhs)
+  elif str_n_eq(tcode + tbegin, "^", 1)
+    print_simple_op(fd, "xor", dest, lhs, rhs)
+  elif str_n_eq(tcode + tbegin, "<<", 1)
+    print_shift_op(fd, "sal", dest, lhs, rhs)
+  elif str_n_eq(tcode + tbegin, ">>", 1)
+    print_shift_op(fd, "sar", dest, lhs, rhs)
   elif print_op_cmp(fd, op_token, dest, lhs, rhs) == 0 as s8
-    error("Unknown op: `")
+    perror(tpath, trow, tcol, "Unknown op: `")
     write(2, tcode + tbegin, tend - tbegin)
     fprintln(2, "`")
     exit(1)

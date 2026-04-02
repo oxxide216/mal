@@ -276,6 +276,9 @@ proc get_named_var_id(name: s64) -> s64
   let name_begin = token_begins[name]
   let name_end = token_ends[name]
   let name_code = token_codes[name]
+  let name_path = token_paths[name]
+  let name_row = token_rows[name]
+  let name_col = token_cols[name]
   let name_len = name_end - name_begin
   let i = named_vars_len
 
@@ -293,7 +296,7 @@ proc get_named_var_id(name: s64) -> s64
     i = i - 1
   end
 
-  error("Variable ")
+  perror(name_path, name_row, name_col, "Variable ")
   write(2, name_code + name_begin, name_end - name_begin)
   fprintln(2, " was not defined before usage")
 
@@ -385,21 +388,66 @@ proc make_ir_primary_expr(dest_id: s64)
   end
 end
 
-extern proc make_ir_expr_cmp(dest_id: s64)
+proc str_to_type_kind(sbegin: s64, send: s64, scode: &s8) -> s8
+  if str_n_eq(scode + sbegin, "unit", 4)
+    retval 0 as s8
+  elif str_n_eq(scode + sbegin, "s8", 2)
+    retval 2 as s8
+  elif str_n_eq(scode + sbegin, "s16", 3)
+    retval 3 as s8
+  elif str_n_eq(scode + sbegin, "s32", 3)
+    retval 4 as s8
+  elif str_n_eq(scode + sbegin, "s64", 3)
+    retval 5 as s8
+  end
+
+  error("Unknown type: ")
+  write(2, scode + sbegin, send - sbegin)
+  fprintln(2, "")
+  exit(1)
+end
+
+proc make_type() -> s64
+  expect_token(mask(0) | mask(20))
+  if token_types[pos] == 0 as s8
+    let kind = str_to_type_kind(token_begins[pos], token_ends[pos], token_codes[pos])
+
+    pos = pos + 1
+
+    push_type(kind, 0)
+  elif token_types[pos] == 20 as s8
+    pos = pos + 1
+
+    let kind = 1 as s8
+    let target = make_type()
+    push_type(kind, target)
+  end
+
+  retval types_len - 1
+end
 
 proc make_ir_secondary_expr(dest_id: s64)
   make_ir_primary_expr(dest_id)
 
-  while (pos < tokens_len) & (token_types[pos] == 26 as s8)
+  while (pos < tokens_len) &
+        ((token_types[pos] == 26 as s8) |
+         (token_types[pos] == 70 as s8))
+    let type = token_types[pos]
     pos = pos + 1
 
-    let temp = alloc_var(1 as s8)
-    make_ir_expr_cmp(temp)
+    if type == 26 as s8
+      let temp = alloc_var(1 as s8)
+      make_ir_expr(temp)
 
-    expect_token(mask(27))
-    pos = pos + 1
+      expect_token(mask(27))
+      pos = pos + 1
 
-    push_ir_instr(21 as s8, dest_id, -1, dest_id, temp, 0)
+      push_ir_instr(21 as s8, dest_id, -1, dest_id, temp, 0)
+    elif type == 70 as s8
+      make_type()
+
+      push_ir_instr(22 as s8, dest_id, -1, dest_id, 0, 0)
+    end
   end
 end
 
@@ -436,8 +484,41 @@ proc make_ir_expr_add(dest_id: s64)
   end
 end
 
-proc make_ir_expr_cmp(dest_id: s64)
+proc make_ir_expr_bit(dest_id: s64)
   make_ir_expr_add(dest_id)
+
+  while (token_types[pos] == 20 as s8) |
+        (token_types[pos] == 21 as s8) |
+        (token_types[pos] == 22 as s8)
+    let op_token = pos
+
+    pos = pos + 1
+
+    let temp = alloc_var(1 as s8)
+    make_ir_expr_add(temp)
+
+    push_ir_instr(2 as s8, dest_id, op_token, dest_id, temp, 0)
+  end
+end
+
+proc make_ir_expr_shift(dest_id: s64)
+  make_ir_expr_bit(dest_id)
+
+  while (token_types[pos] == 28 as s8) |
+        (token_types[pos] == 29 as s8)
+    let op_token = pos
+
+    pos = pos + 1
+
+    let temp = alloc_var(1 as s8)
+    make_ir_expr_bit(temp)
+
+    push_ir_instr(2 as s8, dest_id, op_token, dest_id, temp, 0)
+  end
+end
+
+proc make_ir_expr_cmp(dest_id: s64)
+  make_ir_expr_shift(dest_id)
 
   while (token_types[pos] == 14 as s8) |
         (token_types[pos] == 15 as s8) |
@@ -450,7 +531,7 @@ proc make_ir_expr_cmp(dest_id: s64)
     pos = pos + 1
 
     let temp = alloc_var(1 as s8)
-    make_ir_expr_add(temp)
+    make_ir_expr_shift(temp)
 
     push_ir_instr(2 as s8, dest_id, op_token, dest_id, temp, 0)
   end
@@ -514,7 +595,7 @@ proc make_ir_instrs()
       elif (pos < tokens_len) & (token_types[pos] == 4 as s8)
         pos = pos + 1
 
-        let params_len = 0
+        let params_len = -1
 
         while (pos < tokens_len) & (token_types[pos] != 5 as s8)
           if params_len > 0
@@ -659,44 +740,6 @@ proc make_ir_instrs()
   end
 end
 
-proc str_to_type_kind(sbegin: s64, send: s64, scode: &s8) -> s8
-  if str_n_eq(scode + sbegin, "unit", 4)
-    retval 0 as s8
-  elif str_n_eq(scode + sbegin, "s8", 2)
-    retval 2 as s8
-  elif str_n_eq(scode + sbegin, "s16", 3)
-    retval 3 as s8
-  elif str_n_eq(scode + sbegin, "s32", 3)
-    retval 4 as s8
-  elif str_n_eq(scode + sbegin, "s64", 3)
-    retval 5 as s8
-  end
-
-  error("Unknown type: ")
-  write(2, scode + sbegin, send - sbegin)
-  fprintln(2, "")
-  exit(1)
-end
-
-proc make_type() -> s64
-  expect_token(mask(0) | mask(20))
-  if token_types[pos] == 0 as s8
-    let kind = str_to_type_kind(token_begins[pos], token_ends[pos], token_codes[pos])
-
-    pos = pos + 1
-
-    push_type(kind, 0)
-  elif token_types[pos] == 20 as s8
-    pos = pos + 1
-
-    let kind = 1 as s8
-    let target = make_type()
-    push_type(kind, target)
-  end
-
-  retval types_len - 1
-end
-
 proc make_ir_proc(pbegin: s64)
   expect_token(mask(0))
   let name_token = pos
@@ -837,6 +880,8 @@ proc print_instr_type(type: s8)
     print("STOREP")
   elif type == 21 as s8
     print("LOADP")
+  elif type == 22 as s8
+    print("CAST")
   end
 end
 
@@ -859,19 +904,19 @@ proc instr_has_arg1(index: s64) -> s8
          (type == 13 as s8) | (type == 14 as s8) |
          (type == 15 as s8) | (type == 16 as s8) |
          (type == 18 as s8) | (type == 20 as s8) |
-         (type == 21 as s8)
+         (type == 21 as s8) | (type == 22 as s8)
 end
 
 proc instr_has_arg2(index: s64) -> s8
   let type = ir_types[index]
   retval (type == 2 as s8) | (type == 8 as s8) |
          (type == 14 as s8) | (type == 20 as s8) |
-         (type == 21 as s8)
+         (type == 21 as s8) | (type == 22 as s8)
 end
 
 proc instr_has_arg3(index: s64) -> s8
   let type = ir_types[index]
-  retval (type == 20 as s8)
+  retval (type == 20 as s8) | (type == 22 as s8)
 end
 
 proc instr_is_arg1_var(index: s64) -> s8
@@ -880,11 +925,13 @@ proc instr_is_arg1_var(index: s64) -> s8
 end
 
 proc instr_is_arg2_var(index: s64) -> s8
-  retval 1 as s8
+  let type = ir_types[index]
+  retval (type != 22 as s8)
 end
 
 proc instr_is_arg3_var(index: s64) -> s8
-  retval 1 as s8
+  let type = ir_types[index]
+  retval (type != 22 as s8)
 end
 
 proc print_type(index: s64)

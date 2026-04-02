@@ -63,31 +63,33 @@ proc is_digit(char: s8) -> s8
 end
 
 proc get_ident_token_type(code: &s8, tbegin: s64, tend: s64) -> s8
-  if str_n_eq(code + tbegin, "proc", 4)
+  let tlen = tend - tbegin
+
+  if (tlen == 4) & str_n_eq(code + tbegin, "proc", 4)
     retval 64 as s8
-  elif str_n_eq(code + tbegin, "end", 3)
+  elif (tlen == 3) & str_n_eq(code + tbegin, "end", 3)
     retval 65 as s8
-  elif str_n_eq(code + tbegin, "let", 3)
+  elif (tlen == 3) & str_n_eq(code + tbegin, "let", 3)
     retval 66 as s8
-  elif str_n_eq(code + tbegin, "retval", 6)
+  elif (tlen == 6) & str_n_eq(code + tbegin, "retval", 6)
     retval 67 as s8
-  elif str_n_eq(code + tbegin, "ret", 3)
+  elif (tlen == 3) & str_n_eq(code + tbegin, "ret", 3)
     retval 68 as s8
-  elif str_n_eq(code + tbegin, "extern", 6)
+  elif (tlen == 6) & str_n_eq(code + tbegin, "extern", 6)
     retval 69 as s8
-  elif str_n_eq(code + tbegin, "as", 2)
+  elif (tlen == 2) & str_n_eq(code + tbegin, "as", 2)
     retval 70 as s8
-  elif str_n_eq(code + tbegin, "if", 2)
+  elif (tlen == 2) & str_n_eq(code + tbegin, "if", 2)
     retval 71 as s8
-  elif str_n_eq(code + tbegin, "elif", 4)
+  elif (tlen == 4) & str_n_eq(code + tbegin, "elif", 4)
     retval 72 as s8
-  elif str_n_eq(code + tbegin, "else", 4)
+  elif (tlen == 4) & str_n_eq(code + tbegin, "else", 4)
     retval 73 as s8
-  elif str_n_eq(code + tbegin, "while", 5)
+  elif (tlen == 5) & str_n_eq(code + tbegin, "while", 5)
     retval 74 as s8
-  elif str_n_eq(code + tbegin, "include", 7)
+  elif (tlen == 7) & str_n_eq(code + tbegin, "include", 7)
     retval 75 as s8
-  elif str_n_eq(code + tbegin, "sizeof", 6)
+  elif (tlen == 6) & str_n_eq(code + tbegin, "sizeof", 6)
     retval 76 as s8
   end
 
@@ -294,6 +296,10 @@ proc lex(code: &s8, path: &s8)
         push_token(i, i + 2, 17 as s8, code, path, row, col)
         i = i + 2
         col = col + 2
+      elif code[i + 1] == '<'
+        push_token(i, i + 2, 28 as s8, code, path, row, col)
+        i = i + 2
+        col = col + 2
       else
         push_token(i, i + 1, 16 as s8, code, path, row, col)
         i = i + 1
@@ -302,6 +308,10 @@ proc lex(code: &s8, path: &s8)
     elif code[i] == '>'
       if code[i + 1] == '='
         push_token(i, i + 2, 19 as s8, code, path, row, col)
+        i = i + 2
+        col = col + 2
+      elif code[i + 1] == '>'
+        push_token(i, i + 2, 29 as s8, code, path, row, col)
         i = i + 2
         col = col + 2
       else
