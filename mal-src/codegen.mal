@@ -113,21 +113,37 @@ proc print_type_prefix(fd: s64, index: s64)
   end
 end
 
+proc print_reg_typed(fd: s64, type: s64, a: &s8, b: &s8, c: &s8, d: &s8)
+  let kind = type_kinds[type]
+
+  if kind == 1 as s8
+    fprint(fd, d)
+  elif kind == 2 as s8
+    fprint(fd, a)
+  elif kind == 3 as s8
+    fprint(fd, b)
+  elif kind == 4 as s8
+    fprint(fd, c)
+  elif kind == 5 as s8
+    fprint(fd, d)
+  end
+end
+
 proc print_var_loc(fd: s64, index: s64)
   let type = var_types[index]
   let reg_index = var_indices[index]
   let offset = var_offsets[index]
 
   if reg_index == 0
-    fprint(fd, "rbx")
+    print_reg_typed(fd, type, "bl", "bx", "ebx", "rbx")
   elif reg_index == 1
-    fprint(fd, "r12")
+    print_reg_typed(fd, type, "r12b", "r12w", "r12d", "r12")
   elif reg_index == 2
-    fprint(fd, "r13")
+    print_reg_typed(fd, type, "r13b", "r13w", "r13d", "r13")
   elif reg_index == 3
-    fprint(fd, "r14")
+    print_reg_typed(fd, type, "r14b", "r14w", "r14d", "r14")
   elif reg_index == 4
-    fprint(fd, "r15")
+    print_reg_typed(fd, type, "r15b", "r15w", "r15d", "r15")
   elif offset < 0
     let str = s64_to_str(0 - offset)
     print_type_prefix(fd, type)
@@ -727,6 +743,49 @@ proc gen_asm_instr(fd: s64, index: s64)
       fprint(fd, ret_reg)
       fprintln(fd, "")
     end
+  elif type == 22 as s8
+    let prev_type_kind = type_kinds[var_types[ir_arg1s[index]]]
+    let new_type_kind = type_kinds[ir_arg2s[index]]
+    let ret_reg = get_type_dest_reg(var_types[ir_arg1s[index]])
+
+    if (prev_type_kind == 2 as s8) & (new_type_kind == 4 as s8)
+      if (var_indices[ir_arg1s[index]] == -1) & (var_indices[ir_dest_ids[index]] == -1)
+        fprint(fd, "  mov ")
+        fprint(fd, ret_reg)
+        fprint(fd, ",")
+        print_var_loc(fd, ir_arg1s[index])
+        fprintln(fd, "")
+      end
+      fprint(fd, "  movsx ")
+      print_var_loc(fd, ir_dest_ids[index])
+      fprint(fd, ",")
+      if (var_indices[ir_arg1s[index]] == -1) & (var_indices[ir_dest_ids[index]] == -1)
+        fprint(fd, ret_reg)
+      else
+        print_var_loc(fd, ir_arg1s[index])
+      end
+      fprintln(fd, "")
+    elif (prev_type_kind == 4 as s8) &
+         ((new_type_kind == 5 as s8) | (new_type_kind == 1 as s8))
+      if (var_indices[ir_arg1s[index]] == -1) & (var_indices[ir_dest_ids[index]] == -1)
+        fprint(fd, "  mov ")
+        fprint(fd, ret_reg)
+        fprint(fd, ",")
+        print_var_loc(fd, ir_arg1s[index])
+        fprintln(fd, "")
+      end
+      fprint(fd, "  movsxd ")
+      print_var_loc(fd, ir_dest_ids[index])
+      fprint(fd, ",")
+      if (var_indices[ir_arg1s[index]] == -1) & (var_indices[ir_dest_ids[index]] == -1)
+        fprint(fd, ret_reg)
+      else
+        print_var_loc(fd, ir_arg1s[index])
+      end
+      fprintln(fd, "")
+    end
+  elif type == 23 as s8
+    fprintln(fd, "  ; TODO: PARAM codegen")
   end
 end
 

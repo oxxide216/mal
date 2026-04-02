@@ -427,7 +427,8 @@ proc make_type() -> s64
 end
 
 proc make_ir_secondary_expr(dest_id: s64)
-  make_ir_primary_expr(dest_id)
+  let temp0 = alloc_var(1 as s8)
+  make_ir_primary_expr(temp0)
 
   while (pos < tokens_len) &
         ((token_types[pos] == 26 as s8) |
@@ -436,19 +437,19 @@ proc make_ir_secondary_expr(dest_id: s64)
     pos = pos + 1
 
     if type == 26 as s8
-      let temp = alloc_var(1 as s8)
-      make_ir_expr(temp)
+      let temp1 = alloc_var(1 as s8)
+      make_ir_expr(temp1)
 
       expect_token(mask(27))
       pos = pos + 1
 
-      push_ir_instr(21 as s8, dest_id, -1, dest_id, temp, 0)
+      push_ir_instr(21 as s8, temp0, -1, temp0, temp1, 0)
     elif type == 70 as s8
-      make_type()
-
-      push_ir_instr(22 as s8, dest_id, -1, dest_id, 0, 0)
+      push_ir_instr(22 as s8, temp0, -1, temp0, make_type(), 0)
     end
   end
+
+  push_ir_instr(5 as s8, dest_id, -1, temp0, 0, 0)
 end
 
 proc make_ir_expr_mul(dest_id: s64)
@@ -595,23 +596,25 @@ proc make_ir_instrs()
       elif (pos < tokens_len) & (token_types[pos] == 4 as s8)
         pos = pos + 1
 
-        let params_len = -1
+        let temp = alloc_var(1 as s8)
+        let params_count = 0
 
         while (pos < tokens_len) & (token_types[pos] != 5 as s8)
-          if params_len > 0
+          if params_count > 0
             expect_token(mask(25))
             pos = pos + 1
           end
 
-          params_len = params_len + 1
+          make_ir_expr(temp)
+          push_ir_instr(23 as s8, 0, -1, temp, 0, 0)
 
-          make_ir_expr(0 - params_len)
+          params_count = params_count + 1
         end
 
         expect_token(mask(5))
         pos = pos + 1
 
-        push_ir_instr(18 as s8, 0, name_token, params_len, 0, 0)
+        push_ir_instr(18 as s8, 0, name_token, params_count, 0, 0)
       else
         expect_token(mask(13))
         pos = pos + 1
@@ -882,6 +885,8 @@ proc print_instr_type(type: s8)
     print("LOADP")
   elif type == 22 as s8
     print("CAST")
+  elif type == 23 as s8
+    print("PARAM")
   end
 end
 
@@ -903,8 +908,9 @@ proc instr_has_arg1(index: s64) -> s8
          (type == 9 as s8) | ((type == 11 as s8) & (token == -1)) |
          (type == 13 as s8) | (type == 14 as s8) |
          (type == 15 as s8) | (type == 16 as s8) |
-         (type == 18 as s8) | (type == 20 as s8) |
-         (type == 21 as s8) | (type == 22 as s8)
+         (type == 18 as s8) | (type == 19 as s8) |
+         (type == 20 as s8) | (type == 21 as s8) |
+         (type == 22 as s8) | (type == 23 as s8)
 end
 
 proc instr_has_arg2(index: s64) -> s8
@@ -921,7 +927,8 @@ end
 
 proc instr_is_arg1_var(index: s64) -> s8
   let type = ir_types[index]
-  retval (type != 0 as s8) & (type != 4 as s8)
+  retval (type != 0 as s8) & (type != 4 as s8) &
+         (type != 18 as s8) & (type != 19 as s8)
 end
 
 proc instr_is_arg2_var(index: s64) -> s8

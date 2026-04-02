@@ -111,6 +111,8 @@ proc instr_get_dest_type(index: s64) -> s64
     retval type_targets[var_types[ir_arg1s[index]]]
   elif type == 19 as s8
     retval get_proc_return_type(ir_arg0_tokens[index])
+  elif type == 22 as s8
+    retval ir_arg2s[index]
   end
 
   retval 0
