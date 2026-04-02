@@ -15,6 +15,7 @@ proc main(argc: s64, argv: &&s8) -> s64
   init_lexer()
   init_ir_maker()
   init_meta_maker()
+  init_codegen()
 
   if argc < 3
     print_usage(argv[0])

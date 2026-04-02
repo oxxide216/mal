@@ -26,11 +26,13 @@ proc main()
     i = i + 1
   end
 
+  retval 4 / 2
+
   #global = 2 + 2
   #retval global
 end
 
-proc exit(code: s32) -> s32
+proc exit(code: s64) -> s64
   "mov rax,60"
   "mov rdi,", code
   "syscall"

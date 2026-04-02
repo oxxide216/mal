@@ -369,9 +369,10 @@ proc make_ir_primary_expr(dest_id: s64)
   elif token_types[pos] == 10 as s8
     pos = pos + 1
 
-    make_ir_primary_expr(dest_id)
+    let temp = alloc_var(1 as s8)
+    make_ir_primary_expr(temp)
 
-    push_ir_instr(9 as s8, dest_id, -1, dest_id, 0)
+    push_ir_instr(9 as s8, dest_id, -1, temp, 0)
   end
 end
 

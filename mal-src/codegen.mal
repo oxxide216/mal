@@ -1,6 +1,66 @@
 include "meta.mal"
 include "alloc.mal"
 
+let strs_count: s64
+
+proc init_codegen()
+  strs_count = 0
+end
+
+proc get_type_dest_reg(index: s64) -> &s8
+  let kind = type_kinds[index]
+
+  if kind == 1 as s8
+    retval "rax"
+  elif kind == 2 as s8
+    retval "al"
+  elif kind == 3 as s8
+    retval "ax"
+  elif kind == 4 as s8
+    retval "eax"
+  elif kind == 5 as s8
+    retval "rax"
+  end
+
+  retval ""
+end
+
+proc get_type_temp_reg(index: s64) -> &s8
+  let kind = type_kinds[index]
+
+  if kind == 1 as s8
+    retval "rbx"
+  elif kind == 2 as s8
+    retval "bl"
+  elif kind == 3 as s8
+    retval "bx"
+  elif kind == 4 as s8
+    retval "ebx"
+  elif kind == 5 as s8
+    retval "rbx"
+  end
+
+  retval ""
+end
+
+proc get_type_rem_reg(index: s64) -> &s8
+  let kind = type_kinds[index]
+
+  if kind == 1 as s8
+    retval "rdx"
+  elif kind == 2 as s8
+    retval "dl"
+  elif kind == 3 as s8
+    retval "dx"
+  elif kind == 4 as s8
+    retval "edx"
+  elif kind == 5 as s8
+    retval "rdx"
+  end
+
+  retval ""
+end
+
 proc print_type_prefix(fd: s64, index: s64)
   let kind = type_kinds[index]
 
@@ -15,7 +75,6 @@ proc print_type_prefix(fd: s64, index: s64)
   elif kind == 5 as s8
     fprint(fd, "qword")
   end
-
 end
 
 proc print_var_loc(fd: s64, index: s64)
@@ -50,11 +109,247 @@ proc print_var_loc(fd: s64, index: s64)
   end
 end
 
+proc print_str_bytes(fd: s64, token: s64)
+  let len = token_ends[token] - token_begins[token]
+  let chars_emitted = 0
+  let i = 0
+
+  while i < len
+    if chars_emitted > 0
+      fprint(fd, ",")
+    end
+
+    let str = s64_to_str(code[token_begins[token] + i] as s32 as s64)
+    fprint(fd, str)
+    free(str)
+
+    chars_emitted = chars_emitted + 1
+    i = i + 1
+  end
+
+  if chars_emitted > 0
+    fprint(fd, ",")
+  end
+  fprint(fd, "0")
+end
+
+proc print_move(fd: s64, dest: s64, src: s64)
+  let ret_reg = get_type_dest_reg(var_types[dest])
+
+  if (var_indices[dest] == -1) & (var_indices[src] == -1)
+    fprint(fd, "  mov ")
+    fprint(fd, ret_reg)
+    fprint(fd, ",")
+    print_var_loc(fd, src)
+    fprintln(fd, "")
+    fprint(fd, "  mov ")
+    print_var_loc(fd, dest)
+    fprint(fd, ",")
+    fprint(fd, ret_reg)
+    fprintln(fd, "")
+  else
+    fprint(fd, "  mov ")
+    print_var_loc(fd, dest)
+    fprint(fd, ",")
+    print_var_loc(fd, src)
+    fprintln(fd, "")
+  end
+end
+
+proc print_type_sign_extend(fd: s64, index: s64)
+  let kind = type_kinds[index]
+
+  if kind == 1 as s8
+    fprintln(fd, "  cqo")
+  elif kind == 3 as s8
+    fprintln(fd, "  cwd")
+  elif kind == 4 as s8
+    fprintln(fd, "  cdq")
+  elif kind == 5 as s8
+    fprintln(fd, "  cqo")
+  end
+end
+
+proc print_op_cmp(fd: s64, op_token: s64, dest: s64, lhs: s64, rhs: s64) -> s8
+  let tbegin = token_begins[op_token]
+  let tend = token_ends[op_token]
+  let ret_reg = get_type_dest_reg(var_types[dest])
+
+  if (var_indices[lhs] == -1) & (var_indices[rhs] == -1)
+    fprint(fd, "  mov ")
+    fprint(fd, ret_reg)
+    fprint(fd, ",")
+    print_var_loc(fd, rhs)
+    fprintln(fd, "")
+    fprint(fd, "  cmp ")
+    print_var_loc(fd, lhs)
+    fprint(fd, ",")
+    fprint(fd, ret_reg)
+    fprintln(fd, "")
+  else
+    fprint(fd, "  cmp ")
+    print_var_loc(fd, lhs)
+    fprint(fd, ",")
+    print_var_loc(fd, rhs)
+    fprintln(fd, "")
+  end
+
+  fprint(fd, "  mov ")
+  fprint(fd, ret_reg)
+  fprint(fd, ",")
+  fprintln(fd, "1")
+
+  if str_n_eq(code + tbegin, "==", 2)
+    fprint(fd, "  cmove ")
+    print_var_loc(fd, dest)
+    fprint(fd, ",")
+    fprintln(fd, ret_reg)
+
+    retval 1 as s8
+  elif str_n_eq(code + tbegin, "!=", 2)
+    fprint(fd, "  cmovne ")
+    print_var_loc(fd, dest)
+    fprint(fd, ",")
+    fprintln(fd, ret_reg)
+
+    retval 1 as s8
+  elif str_n_eq(code + tbegin, "<=", 2)
+    fprint(fd, "  cmovle ")
+    print_var_loc(fd, dest)
+    fprint(fd, ",")
+    fprintln(fd, ret_reg)
+
+    retval 1 as s8
+  elif str_n_eq(code + tbegin, "<", 1)
+    fprint(fd, "  cmovl ")
+    print_var_loc(fd, dest)
+    fprint(fd, ",")
+    fprintln(fd, ret_reg)
+
+    retval 1 as s8
+  elif str_n_eq(code + tbegin, ">=", 2)
+    fprint(fd, "  cmovge ")
+    print_var_loc(fd, dest)
+    fprint(fd, ",")
+    fprintln(fd, ret_reg)
+
+    retval 1 as s8
+  elif str_n_eq(code + tbegin, ">", 2)
+    fprint(fd, "  cmovg ")
+    print_var_loc(fd, dest)
+    fprint(fd, ",")
+    fprintln(fd, ret_reg)
+
+    retval 1 as s8
+  else
+    retval 0 as s8
+  end
+end
+
+proc print_op(fd: s64, op_token: s64, dest: s64, lhs: s64, rhs: s64)
+  let tbegin = token_begins[op_token]
+  let tend = token_ends[op_token]
+  let ret_reg = get_type_dest_reg(var_types[dest])
+  let rem_reg = get_type_rem_reg(var_types[dest])
+
+  if str_n_eq(code + tbegin, "+", 1)
+    if dest != lhs
+      print_move(fd, dest, lhs)
+    end
+    if (var_indices[dest] == -1) & (var_indices[rhs] == -1)
+      fprint(fd, "  mov ")
+      fprint(fd, ret_reg)
+      fprint(fd, ",")
+      print_var_loc(fd, rhs)
+      fprintln(fd, "")
+    end
+    fprint(fd, "  add ")
+    print_var_loc(fd, dest)
+    fprint(fd, ",")
+    if (var_indices[dest] == -1) & (var_indices[rhs] == -1)
+      fprint(fd, ret_reg)
+    else
+      print_var_loc(fd, rhs)
+    end
+    fprintln(fd, "")
+  elif str_n_eq(code + tbegin, "-", 1)
+    if dest != lhs
+      print_move(fd, dest, lhs)
+    end
+    if (var_indices[dest] == -1) & (var_indices[rhs] == -1)
+      fprint(fd, "  mov ")
+      fprint(fd, ret_reg)
+      fprint(fd, ",")
+      print_var_loc(fd, rhs)
+      fprintln(fd, "")
+    end
+    fprint(fd, "  sub ")
+    print_var_loc(fd, dest)
+    fprint(fd, ",")
+    if (var_indices[dest] == -1) & (var_indices[rhs] == -1)
+      fprint(fd, ret_reg)
+    else
+      print_var_loc(fd, rhs)
+    end
+    fprintln(fd, "")
+  elif str_n_eq(code + tbegin, "*", 1)
+    fprint(fd, "  mov ")
+    fprint(fd, ret_reg)
+    fprint(fd, ",")
+    print_var_loc(fd, lhs)
+    fprintln(fd, "")
+    fprint(fd, "  imul ")
+    print_var_loc(fd, rhs)
+    fprintln(fd, "")
+    fprint(fd, "  mov ")
+    print_var_loc(fd, dest)
+    fprint(fd, ",")
+    fprint(fd, ret_reg)
+    fprintln(fd, "")
+  elif str_n_eq(code + tbegin, "/", 1)
+    fprint(fd, "  mov ")
+    fprint(fd, ret_reg)
+    fprint(fd, ",")
+    print_var_loc(fd, lhs)
+    fprintln(fd, "")
+    print_type_sign_extend(fd, var_types[dest])
+    fprint(fd, "  idiv ")
+    print_var_loc(fd, rhs)
+    fprintln(fd, "")
+    fprint(fd, "  mov ")
+    print_var_loc(fd, dest)
+    fprint(fd, ",")
+    fprint(fd, ret_reg)
+    fprintln(fd, "")
+  elif str_n_eq(code + tbegin, "%", 1)
+    fprint(fd, "  mov ")
+    fprint(fd, ret_reg)
+    fprint(fd, ",")
+    print_var_loc(fd, lhs)
+    fprintln(fd, "")
+    print_type_sign_extend(fd, var_types[dest])
+    fprint(fd, "  idiv ")
+    print_var_loc(fd, rhs)
+    fprintln(fd, "")
+    fprint(fd, "  mov ")
+    print_var_loc(fd, dest)
+    fprint(fd, ",")
+    fprint(fd, rem_reg)
+    fprintln(fd, "")
+  elif print_op_cmp(fd, op_token, dest, lhs, rhs) == 0 as s8
+    error("Unknown op: `")
+    write(2, code + tbegin, tend - tbegin)
+    fprintln(2, "`")
+    exit(1)
+  end
+end
+
 proc gen_asm_instr(fd: s64, index: s64)
   let type = ir_types[index]
 
   if type == 2 as s8
-    fprintln(fd, "  ; TODO: op codegen")
+    print_op(fd, ir_arg0_tokens[index], ir_dest_ids[index],
+             ir_arg1s[index], ir_arg2s[index])
   elif type == 3 as s8
     let token = ir_arg0_tokens[index]
 
@@ -74,23 +369,131 @@ proc gen_asm_instr(fd: s64, index: s64)
 
     free(str)
   elif type == 5 as s8
-    fprint(fd, "  mov ")
-    print_var_loc(fd, ir_dest_ids[index])
-    fprint(fd, ",")
-    print_var_loc(fd, ir_arg1s[index])
-    fprintln(fd, "")
+    let dest_id = ir_dest_ids[index]
+    let arg_id = ir_arg1s[index]
+
+    if (var_indices[dest_id] == -1) & (var_indices[arg_id] == -1)
+      let ret_reg = get_type_dest_reg(var_types[dest_id])
+
+      fprint(fd, "  mov ")
+      fprint(fd, ret_reg)
+      fprint(fd, ",")
+      print_var_loc(fd, ir_arg1s[index])
+      fprintln(fd, "")
+      fprint(fd, "  mov ")
+      print_var_loc(fd, ir_dest_ids[index])
+      fprint(fd, ",")
+      fprint(fd, ret_reg)
+      fprintln(fd, "")
+    else
+      fprint(fd, "  mov ")
+      print_var_loc(fd, ir_dest_ids[index])
+      fprint(fd, ",")
+      print_var_loc(fd, ir_arg1s[index])
+      fprintln(fd, "")
+    end
   elif type == 6 as s8
-    fprintln(fd, "  ; TODO: str codegen")
-  elif type == 7 as s8
+    let dest_id = ir_dest_ids[index]
+    let ret_reg = get_type_dest_reg(var_types[dest_id])
+    let str = s64_to_str(strs_count)
+    strs_count = strs_count + 1
+
     fprint(fd, "  lea ")
-    print_var_loc(fd, ir_dest_ids[index])
+    fprint(fd, ret_reg)
+    fprint(fd, ",[str@")
+    fprint(fd, str)
+    fprintln(fd, "]")
+    fprint(fd, "  mov ")
+    print_var_loc(fd, dest_id)
+    fprint(fd, ",")
+    fprintln(fd, ret_reg)
+
+    free(str)
+  elif type == 7 as s8
+    let dest_id = ir_dest_ids[index]
+    let ret_reg = get_type_dest_reg(var_types[dest_id])
+
+    fprint(fd, "  lea ")
+    if var_indices[dest_id] == -1
+      fprint(fd, ret_reg)
+    else
+      print_var_loc(fd, ir_dest_ids[index])
+    end
     fprint(fd, ",")
     print_var_loc(fd, ir_arg1s[index])
     fprintln(fd, "")
+    if var_indices[dest_id] == -1
+      fprint(fd, "  mov ")
+      print_var_loc(fd, ir_dest_ids[index])
+      fprint(fd, ",")
+      fprint(fd, ret_reg)
+      fprintln(fd, "")
+    end
   elif type == 8 as s8
-    fprintln(fd, "  ; TODO: storep codegen")
+    let arg0_id = ir_arg1s[index]
+    let arg1_id = ir_arg2s[index]
+    let ret_reg = get_type_dest_reg(var_types[arg0_id])
+    let temp_reg = get_type_temp_reg(var_types[arg1_id])
+
+    if var_indices[arg0_id] == -1
+      fprint(fd, "  mov ")
+      fprint(fd, ret_reg)
+      fprint(fd, ",")
+      print_var_loc(fd, arg0_id)
+      fprintln(fd, "")
+    end
+    if var_indices[arg1_id] == -1
+      fprint(fd, "  mov ")
+      fprint(fd, temp_reg)
+      fprint(fd, ",")
+      print_var_loc(fd, arg1_id)
+      fprintln(fd, "")
+    end
+    fprint(fd, "  mov [")
+    if var_indices[arg0_id] == -1
+      fprint(fd, ret_reg)
+    else
+      print_var_loc(fd, arg0_id)
+    end
+    fprint(fd, "],")
+    if var_indices[arg1_id] == -1
+      fprint(fd, temp_reg)
+    else
+      print_var_loc(fd, arg1_id)
+    end
+    fprintln(fd, "")
   elif type == 9 as s8
-    fprintln(fd, "  ; TODO: loadp codegen")
+    let dest_id = ir_dest_ids[index]
+    let arg_id = ir_arg1s[index]
+    let ret_reg = get_type_dest_reg(var_types[dest_id])
+
+    if var_indices[arg_id] == -1
+      fprint(fd, "  mov ")
+      fprint(fd, ret_reg)
+      fprint(fd, ",")
+      print_var_loc(fd, arg_id)
+      fprintln(fd, "")
+    end
+    fprint(fd, "  mov ")
+    if var_indices[dest_id] == -1
+      fprint(fd, ret_reg)
+    else
+      print_var_loc(fd, dest_id)
+    end
+    fprint(fd, ",[")
+    if var_indices[arg_id] == -1
+      fprint(fd, ret_reg)
+    else
+      print_var_loc(fd, arg_id)
+    end
+    fprintln(fd, "]")
+    if var_indices[dest_id] == -1
+      fprint(fd, "  mov ")
+      print_var_loc(fd, dest_id)
+      fprint(fd, ",")
+      fprint(fd, ret_reg)
+      fprintln(fd, "")
+    end
   elif type == 10 as s8
     fprint(fd, "  ")
   elif type == 11 as s8
@@ -112,7 +515,17 @@ proc gen_asm_instr(fd: s64, index: s64)
 
     free(str)
   elif type == 14 as s8
-    fprintln(fd, "  ; TODO: jump if zero codegen")
+    let str = s64_to_str(ir_arg1s[index])
+
+    fprint(fd, "  test ")
+    print_var_loc(fd, ir_arg2s[index])
+    fprint(fd, ",")
+    print_var_loc(fd, ir_arg2s[index])
+    fprintln(fd, "")
+    fprint(fd, "  jz .l")
+    fprintln(fd, str)
+
+    free(str)
   elif type == 15 as s8
     let str = s64_to_str(ir_arg1s[index])
 
@@ -122,13 +535,36 @@ proc gen_asm_instr(fd: s64, index: s64)
 
     free(str)
   elif type == 16 as s8
-    fprintln(fd, "  ; TODO: retval codegen")
+    let ret_reg = get_type_dest_reg(var_types[ir_arg1s[index]])
+
+    fprint(fd, "  mov ")
+    fprint(fd, ret_reg)
+    fprint(fd, ",")
+    print_var_loc(fd, ir_arg1s[index])
+    fprintln(fd, "")
+    fprintln(fd, "  jmp .end")
   elif type == 17 as s8
     fprintln(fd, "  jmp .end")
   elif type == 18 as s8
-    fprintln(fd, "  ; TODO: call codegen")
+    let token = ir_arg0_tokens[index]
+
+    fprint(fd, "  call ")
+    write(fd, code + token_begins[token],
+          token_ends[token] - token_begins[token])
+    fprintln(fd, "")
   elif type == 19 as s8
-    fprintln(fd, "  ; TODO: call store codegen")
+    let token = ir_arg0_tokens[index]
+    let dest_id = ir_dest_ids[index]
+    let ret_reg = get_type_dest_reg(var_types[dest_id])
+
+    fprint(fd, "  call ")
+    write(fd, code + token_begins[token],
+          token_ends[token] - token_begins[token])
+    fprintln(fd, "")
+    fprint(fd, "  mov ")
+    print_var_loc(fd, dest_id)
+    fprint(fd, ",")
+    fprintln(fd, ret_reg)
   end
 end
 
@@ -199,6 +635,40 @@ proc gen_asm(fd: s64)
       end
 
       fprintln(fd, "  ret")
+    end
+
+    i = i + 1
+  end
+
+  if strs_count > 0
+    fprintln(fd, "section '.data'")
+  end
+
+  strs_count = 0
+  i = 0
+
+  while i < ir_procs_len
+    let pbegin = ir_proc_begins[i]
+    let pend = ir_proc_ends[i]
+
+    let j = pbegin
+
+    while j < pend
+      if ir_types[j] == 6 as s8
+        let str = s64_to_str(strs_count)
+
+        fprint(fd, "str@")
+        fprint(fd, str)
+        fprint(fd, ": db ")
+        print_str_bytes(fd, ir_arg0_tokens[j])
+        fprintln(fd, "")
+
+        free(str)
+
+        strs_count = strs_count + 1
+      end
+
+      j = j + 1
     end
 
     i = i + 1
