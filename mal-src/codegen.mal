@@ -852,18 +852,6 @@ proc gen_asm_instr(fd: s64, index: s64)
           token_ends[token] - token_begins[token])
     fprintln(fd, "")
 
-    let i = params_count
-
-    while i > 0
-      if i - 1 < param_regs_total
-        fprint(fd, "  pop ")
-        print_proc_param_loc(fd, ir_arg1s[index], 5, i - 1)
-        fprintln(fd, "")
-      end
-
-      i = i - 1
-    end
-
     let size = get_proc_params_stack_size(ir_arg1s[index])
     if size > 0
       let str = s64_to_str(size)
@@ -903,18 +891,6 @@ proc gen_asm_instr(fd: s64, index: s64)
     print_var_loc(fd, dest_id, 0)
     fprint(fd, ",")
     fprintln(fd, ret_reg)
-
-    let i = params_count
-
-    while i > 0
-      if i - 1 < param_regs_total
-        fprint(fd, "  pop ")
-        print_proc_param_loc(fd, ir_arg1s[index], 5, i - 1)
-        fprintln(fd, "")
-      end
-
-      i = i - 1
-    end
 
     let size = get_proc_params_stack_size(ir_arg1s[index])
     if size > 0
@@ -1120,12 +1096,6 @@ proc gen_asm_instr(fd: s64, index: s64)
       fprint(fd, ",")
       print_var_loc(fd, ir_arg2s[index], 0)
       fprintln(fd, "")
-
-      fprint(fd, "  ; ")
-      let pname = ir_proc_name_tokens[ir_arg1s[index]]
-      write(fd, token_codes[pname] + token_begins[pname],
-            token_ends[pname] - token_begins[pname])
-      fprintln(fd, "")
     else
       let ret_reg = get_type_dest_reg(get_var_type(ir_arg2s[index]))
 
@@ -1203,11 +1173,11 @@ proc gen_asm(fd: s64)
 
       #dump_proc_ir(i)
 
-      fprint(fd, "global $")
+      fprint(fd, "\nglobal $")
       write(fd, token_codes[pname_token] + token_begins[pname_token],
             token_ends[pname_token] - token_begins[pname_token])
       fprintln(fd, "")
-      fprint(fd, "\n$")
+      fprint(fd, "$")
       write(fd, token_codes[pname_token] + token_begins[pname_token],
             token_ends[pname_token] - token_begins[pname_token])
       fprintln(fd, ":")
@@ -1272,7 +1242,7 @@ proc gen_asm(fd: s64)
   end
 
   if strs_count > 0
-    fprintln(fd, "section '.data'")
+    fprintln(fd, "\nsection '.data'")
   end
 
   strs_count = 0
@@ -1306,7 +1276,7 @@ proc gen_asm(fd: s64)
   end
 
   if globals_len > 0
-    fprintln(fd, "section '.bss'")
+    fprintln(fd, "\nsection '.bss'")
   end
 
   i = 0

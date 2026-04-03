@@ -87,7 +87,7 @@ proc alloc_regs_for_proc(index: s64)
   i = params_len
 
   while i + 1 < vars_len
-    let j = 0
+    let j = params_len
 
     while j + i + 1 < vars_len
       let a = var_uses[sorted_var_indices[j]]
@@ -120,7 +120,7 @@ proc alloc_regs_for_proc(index: s64)
       param_stack_used = param_stack_used + get_type_size(var_types[i])
     else
       param_regs_used = param_regs_used + 1
-      var_indices[sorted_var_indices[i]] = -1 - param_regs_used
+      var_indices[i] = -1 - param_regs_used
     end
 
     i = i + 1
