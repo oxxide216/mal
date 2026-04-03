@@ -30,8 +30,8 @@ proc main()
 
   retval (4 / 2) << 1
 
-  #global = 2 + 2
-  #retval global
+  global = 2 + 2
+  retval global
 end
 
 proc exit(code: s64) -> s64

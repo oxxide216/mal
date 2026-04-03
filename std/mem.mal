@@ -27,7 +27,7 @@ proc realloc(mem: &s8, size: s64) -> &s8
   let new_mem = malloc(size)
 
   let real_mem = mem - 8
-  let min = *(real_mem as &s64)
+  let min = *(real_mem as &s64) - 8
   if min > size
     min = size
   end

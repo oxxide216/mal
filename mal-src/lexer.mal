@@ -12,6 +12,10 @@ let token_cols: &s64
 let tokens_len: s64
 let tokens_cap: s64
 
+let included_paths: &&s8
+let included_paths_len: s64
+let included_paths_cap: s64
+
 proc init_lexer()
   tokens_len = 0
   tokens_cap = 0
@@ -48,6 +52,35 @@ proc push_token(tbegin: s64, tend: s64, ttype: s8, code: &s8, path: &s8, row: s6
   token_rows[tokens_len] = row
   token_cols[tokens_len] = col
   tokens_len = tokens_len + 1
+end
+
+proc push_included_path(path: &s8)
+  if included_paths_cap <= included_paths_len
+    if included_paths_cap == 0
+      included_paths_cap = 10
+      included_paths = malloc(included_paths_cap * sizeof &s8) as &&s8
+    else
+      included_paths_cap = included_paths_cap * 2
+      included_paths = realloc(included_paths as &s8, included_paths_cap * sizeof &s8) as &&s8
+    end
+  end
+
+  included_paths[included_paths_len] = path
+  included_paths_len = included_paths_len + 1
+end
+
+proc path_is_already_included(path: &s8) -> s8
+  let i = 0
+
+  while i < included_paths_len
+    if str_eq(included_paths[i], path)
+      retval 1 as s8
+    end
+
+    i = i + 1
+  end
+
+  retval 0 as s8
 end
 
 proc is_space(char: s8) -> s8
@@ -253,6 +286,20 @@ proc lex(code: &s8, path: &s8)
         push_token(i, i + 2, 9 as s8, code, path, row, col)
         i = i + 2
         col = col + 2
+      elif is_digit(code[i + 1])
+        let prow = row
+        let pcol = col
+        let tbegin = i
+
+        i = i + 2
+        col = col + 2
+
+        while is_digit(code[i])
+          i = i + 1
+          col = col + 1
+        end
+
+        push_token(tbegin, i, 1 as s8, code, path, prow, pcol)
       else
         push_token(i, i + 1, 8 as s8, code, path, row, col)
         i = i + 1
@@ -387,14 +434,20 @@ proc lex(code: &s8, path: &s8)
       memcopy(new_path + prefix_len, token_codes[last] + token_begins[last] + 1, new_path_len)
       new_path[prefix_len + new_path_len] = 0 as s8
 
-      let new_code = read_file(new_path)
-      if new_code == 0 as &s8
-        perror(path, row, col, "Could not open ")
-        fprintln(2, new_path)
-        exit(1)
-      end
+      if path_is_already_included(new_path)
+        free(new_path)
+      else
+        push_included_path(new_path)
 
-      lex(new_code, new_path)
+        let new_code = read_file(new_path)
+        if new_code == 0 as &s8
+          perror(path, row, col, "Could not open ")
+          fprintln(2, new_path)
+          exit(1)
+        end
+
+        lex(new_code, new_path)
+      end
     end
 
     if is_space == 0 as s8

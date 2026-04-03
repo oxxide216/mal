@@ -1,3 +1,4 @@
+let var_name_tokens: &s64
 let var_types: &s64
 let var_begins: &s64
 let var_ends: &s64
@@ -17,6 +18,7 @@ proc set_min_vars_len(min_len: s64)
     vars_len = min_len
 
     if prev_len == 0
+      var_name_tokens = malloc(vars_len * sizeof s64) as &s64
       var_types = malloc(vars_len * sizeof s64) as &s64
       var_begins = malloc(vars_len * sizeof s64) as &s64
       var_ends = malloc(vars_len * sizeof s64) as &s64
@@ -25,6 +27,7 @@ proc set_min_vars_len(min_len: s64)
       var_indices = malloc(vars_len * sizeof s64) as &s64
       var_offsets = malloc(vars_len * sizeof s64) as &s64
     else
+      var_name_tokens = realloc(var_name_tokens as &s8, vars_len * sizeof s64) as &s64
       var_types = realloc(var_types as &s8, vars_len * sizeof s64) as &s64
       var_begins = realloc(var_begins as &s8, vars_len * sizeof s64) as &s64
       var_ends = realloc(var_ends as &s8, vars_len * sizeof s64) as &s64
@@ -37,6 +40,7 @@ proc set_min_vars_len(min_len: s64)
     let i = prev_len
 
     while i < vars_len
+      var_name_tokens[i] = -1
       var_types[i] = -1
       var_begins[i] = -1
       var_ends[i] = -1
@@ -85,13 +89,31 @@ proc get_proc_index(name: s64) -> s64
   retval -1
 end
 
+proc get_var_type(index: s64) -> s64
+  if index >= 0
+    retval var_types[index]
+  else
+    retval global_types[-1 - index]
+  end
+end
+
 proc instr_get_dest_type(index: s64) -> s64
   let type = ir_types[index]
 
   if type == 0 as s8
     retval -1
   elif type == 2 as s8
-    retval var_types[ir_arg1s[index]]
+    if (token_types[ir_arg0_tokens[index]] == 14 as s8) |
+       (token_types[ir_arg0_tokens[index]] == 15 as s8) |
+       (token_types[ir_arg0_tokens[index]] == 16 as s8) |
+       (token_types[ir_arg0_tokens[index]] == 17 as s8) |
+       (token_types[ir_arg0_tokens[index]] == 18 as s8) |
+       (token_types[ir_arg0_tokens[index]] == 19 as s8)
+      push_type(2 as s8, 0)
+      retval types_len - 1
+    end
+
+    retval get_var_type(ir_arg1s[index])
   elif type == 3 as s8
     push_type(5 as s8, 0)
     retval types_len - 1
@@ -99,73 +121,81 @@ proc instr_get_dest_type(index: s64) -> s64
     push_type(2 as s8, 0)
     retval types_len - 1
   elif type == 5 as s8
-    retval var_types[ir_arg1s[index]]
+    retval get_var_type(ir_arg1s[index])
   elif type == 6 as s8
     push_type(2 as s8, 0)
     push_type(1 as s8, types_len - 1)
     retval types_len - 1
   elif type == 7 as s8
-    push_type(1 as s8, var_types[ir_arg1s[index]])
+    push_type(1 as s8, get_var_type(ir_arg1s[index]))
     retval types_len - 1
   elif type == 9 as s8
-    retval type_targets[var_types[ir_arg1s[index]]]
+    retval type_targets[get_var_type(ir_arg1s[index])]
   elif type == 19 as s8
     retval ir_proc_return_types[ir_arg1s[index]]
+  elif type == 21 as s8
+    retval type_targets[get_var_type(ir_arg1s[index])]
   elif type == 22 as s8
     retval ir_arg2s[index]
+  elif type == 24 as s8
+    push_type(5 as s8, 0)
+    retval types_len - 1
   end
 
-  retval 0
+  retval -1
 end
 
 proc make_meta_for_proc(index: s64)
   reset_vars()
 
-  let pbegin = ir_proc_begins[index]
-  let pend = ir_proc_ends[index]
+  set_min_vars_len(ir_proc_params_lens[index])
 
   let i = 0
-
-  set_min_vars_len(ir_proc_params_lens[index])
 
   while i < ir_proc_params_lens[index]
     var_types[i] = ir_proc_param_types[index][i]
     var_begins[i] = 0
     var_ends[i] = 0
-    var_uses[i] = 0
 
     i = i + 1
   end
+
+  let pbegin = ir_proc_begins[index]
+  let pend = ir_proc_ends[index]
 
   i = pbegin
 
   while i < pend
     if (ir_types[i] == 18 as s8) | (ir_types[i] == 19 as s8)
       ir_arg1s[i] = get_proc_index(ir_arg0_tokens[i])
+    elif ir_types[i] == 23 as s8
+      ir_arg1s[i] = get_proc_index(ir_arg0_tokens[i])
     end
 
     if instr_has_dest(i)
       let dest_id = ir_dest_ids[i]
       set_min_vars_len(dest_id + 1)
-      if var_begins[dest_id] == -1
-        var_begins[dest_id] = i
-      else
-        var_uses[dest_id] = var_uses[dest_id] + 1
-      end
+      if dest_id >= 0
+        if var_begins[dest_id] == -1
+          var_begins[dest_id] = i
+        end
 
-      if var_types[dest_id] == -1
-        var_types[dest_id] = instr_get_dest_type(i)
+        if get_var_type(dest_id) == -1
+          var_types[dest_id] = instr_get_dest_type(i)
+        end
       end
     end
 
     if instr_has_arg1(i)
       if instr_is_arg1_var(i)
         let arg1 = ir_arg1s[i]
-        var_ends[arg1] = i
-        var_uses[arg1] = var_uses[arg1] + 1
+        if arg1 >= 0
+          var_ends[arg1] = i
+          var_uses[arg1] = var_uses[arg1] + 1
 
-        if ir_types[i] == 7 as s8
-          var_is_ref_targets[arg1] = 1 as s8
+          if ir_types[i] == 7 as s8
+            var_is_ref_targets[arg1] = 1 as s8
+          end
         end
       end
     end
@@ -173,16 +203,20 @@ proc make_meta_for_proc(index: s64)
     if instr_has_arg2(i)
       if instr_is_arg2_var(i)
         let arg2 = ir_arg2s[i]
-        var_ends[arg2] = i
-        var_uses[arg2] = var_uses[arg2] + 1
+        if arg2 >= 0
+          var_ends[arg2] = i
+          var_uses[arg2] = var_uses[arg2] + 1
+        end
       end
     end
 
     if instr_has_arg3(i)
       if instr_is_arg3_var(i)
         let arg3 = ir_arg3s[i]
-        var_ends[arg3] = i
-        var_uses[arg3] = var_uses[arg3] + 1
+        if arg3 >= 0
+          var_ends[arg3] = i
+          var_uses[arg3] = var_uses[arg3] + 1
+        end
       end
     end
 

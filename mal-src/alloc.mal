@@ -1,12 +1,15 @@
 include "meta.mal"
 
+let scratch_regs_total: s64
 let param_regs_total: s64
 
+let scratch_regs_used: s64
 let stack_used: s64
 let param_stack_used: s64
 let sorted_var_indices: &s64
 
 proc init_space_allocator()
+  scratch_regs_total = 5
   param_regs_total = 6
 end
 
@@ -49,14 +52,16 @@ proc var_collides_at_reg_index(vbegin: s64, vend: s64, index: s64, max_vars: s64
 end
 
 proc var_get_no_collision_reg_index(vbegin: s64, vend: s64, max_vars: s64) -> s64
-  let REGS_COUNT = 5
-
   let i = 0
 
-  while i < REGS_COUNT
+  while i < scratch_regs_total
     let collides = var_collides_at_reg_index(vbegin, vend, i, max_vars)
 
     if collides == 0 as s8
+      if i + 1 > scratch_regs_used
+        scratch_regs_used = i + 1
+      end
+
       retval i
     end
 
@@ -100,6 +105,7 @@ proc alloc_regs_for_proc(index: s64)
     i = i + 1
   end
 
+  scratch_regs_used = 0
   stack_used = 0
   param_stack_used = 16
 
