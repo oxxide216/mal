@@ -310,18 +310,6 @@ proc print_var_loc(fd: s64, index: s64, min_sized_reg: s64)
 
   if (reg_index >= 0) & (reg_index < scratch_regs_total)
     print_scratch_reg_typed(fd, type, min_sized_reg, reg_index)
-  elif reg_index == -2
-    print_reg_typed(fd, type, min_sized_reg, "dil", "di", "edi", "rdi")
-  elif reg_index == -3
-    print_reg_typed(fd, type, min_sized_reg, "sil", "si", "esi", "rsi")
-  elif reg_index == -4
-    print_reg_typed(fd, type, min_sized_reg, "dl", "dx", "edx", "rdx")
-  elif reg_index == -5
-    print_reg_typed(fd, type, min_sized_reg, "cl", "cx", "ecx", "rcx")
-  elif reg_index == -6
-    print_reg_typed(fd, type, min_sized_reg, "r8b", "r8w", "r8d", "r8")
-  elif reg_index == -7
-    print_reg_typed(fd, type, min_sized_reg, "r9b", "r9w", "r9d", "r9")
   elif offset < 0
     let str = s64_to_str(0 - offset)
     print_type_prefix_min(fd, type, min_sized_reg)
@@ -341,19 +329,33 @@ end
 
 proc print_str_bytes(fd: s64, token: s64)
   let len = token_ends[token] - token_begins[token] - 1
-  let chars_emitted = 0
   let i = 1
+  let chars_emitted = 0
+  let escaped = 0 as s8
 
   while i < len
-    if chars_emitted > 0
-      fprint(fd, ",")
+    let char = token_codes[token][token_begins[token] + i]
+
+    if (escaped == 0 as s8) & (char == '\\')
+      escaped = 1 as s8
+    else
+      if escaped
+        char = escape_char(char)
+        escaped = 0 as s8
+      end
+      let str = s64_to_str(char as s32 as s64)
+
+      if chars_emitted > 0
+        fprint(fd, ",")
+      end
+      fprint(fd, str)
+
+      write(1, &char, 1)
+
+      free(str)
+      chars_emitted = chars_emitted + 1
     end
 
-    let str = s64_to_str(token_codes[token][token_begins[token] + i] as s32 as s64)
-    fprint(fd, str)
-    free(str)
-
-    chars_emitted = chars_emitted + 1
     i = i + 1
   end
 
@@ -859,21 +861,6 @@ proc gen_asm_instr(fd: s64, index: s64)
       fprintln(fd, str)
       free(str)
     end
-
-    let min = ir_proc_params_lens[current_proc_index]
-    if min > param_regs_total
-      min = param_regs_total
-    end
-
-    let i = min
-
-    while i > 0
-      fprint(fd, "  pop ")
-      print_proc_param_loc(fd, current_proc_index, 5, i - 1)
-      fprintln(fd, "")
-
-      i = i - 1
-    end
   elif type == 19 as s8
     let token = ir_arg0_tokens[index]
     let dest_id = ir_dest_ids[index]
@@ -898,21 +885,6 @@ proc gen_asm_instr(fd: s64, index: s64)
       fprint(fd, "  add rsp,")
       fprintln(fd, str)
       free(str)
-    end
-
-    let min = ir_proc_params_lens[current_proc_index]
-    if min > param_regs_total
-      min = param_regs_total
-    end
-
-    let i = min
-
-    while i > 0
-      fprint(fd, "  pop ")
-      print_proc_param_loc(fd, current_proc_index, 5, i - 1)
-      fprintln(fd, "")
-
-      i = i - 1
     end
   elif type == 20 as s8
     let arg0_id = ir_arg1s[index]
@@ -1123,21 +1095,6 @@ proc gen_asm_instr(fd: s64, index: s64)
     free(str)
   elif type == 25 as s8
     push_params_count()
-
-    let min = ir_proc_params_lens[current_proc_index]
-    if min > param_regs_total
-      min = param_regs_total
-    end
-
-    let i = 0
-
-    while i < min
-      fprint(fd, "  push ")
-      print_proc_param_loc(fd, current_proc_index, 5, i)
-      fprintln(fd, "")
-
-      i = i + 1
-    end
   end
 end
 
@@ -1205,9 +1162,35 @@ proc gen_asm(fd: s64)
         j = j + 1
       end
 
-      current_proc_index = i
+      j = 0
+
+      while j < ir_proc_params_lens[i]
+        if j >= param_regs_total
+          let ret_reg = get_type_dest_reg(get_var_type(j))
+
+          fprint(fd, "  mov ")
+          fprint(fd, ret_reg)
+          fprint(fd, ",")
+          print_proc_param_loc(fd, i, 0, j)
+          fprintln(fd, "")
+          fprint(fd, "  mov ")
+          print_var_loc(fd, j, 0)
+          fprint(fd, ",")
+          fprintln(fd, ret_reg)
+        else
+          fprint(fd, "  mov ")
+          print_var_loc(fd, j, 0)
+          fprint(fd, ",")
+          print_proc_param_loc(fd, i, 0, j)
+          fprintln(fd, "")
+        end
+
+        j = j + 1
+      end
 
       j = pbegin
+
+      current_proc_index = i
 
       while j < pend
         gen_asm_instr(fd, j)

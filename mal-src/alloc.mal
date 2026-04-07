@@ -5,7 +5,6 @@ let param_regs_total: s64
 
 let scratch_regs_used: s64
 let stack_used: s64
-let param_stack_used: s64
 let sorted_var_indices: &s64
 
 proc init_space_allocator()
@@ -107,26 +106,8 @@ proc alloc_regs_for_proc(index: s64)
 
   scratch_regs_used = 0
   stack_used = 0
-  param_stack_used = 16
 
   i = 0
-
-  let param_regs_used = 0
-
-  while i < params_len
-    if param_regs_used >= param_regs_total
-      var_indices[i] = -1
-      var_offsets[i] = param_stack_used
-      param_stack_used = param_stack_used + get_type_size(var_types[i])
-    else
-      param_regs_used = param_regs_used + 1
-      var_indices[i] = -1 - param_regs_used
-    end
-
-    i = i + 1
-  end
-
-  i = params_len
 
   while i < vars_len
     let vbegin = var_begins[sorted_var_indices[i]]
