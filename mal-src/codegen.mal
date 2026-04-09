@@ -1143,8 +1143,7 @@ proc gen_asm(fd: s64)
       fprint(fd, "\nglobal $")
       write(fd, token_codes[pname_token] + token_begins[pname_token],
             token_ends[pname_token] - token_begins[pname_token])
-      fprintln(fd, "")
-      fprint(fd, "$")
+      fprint(fd, "\n$")
       write(fd, token_codes[pname_token] + token_begins[pname_token],
             token_ends[pname_token] - token_begins[pname_token])
       fprintln(fd, ":")
