@@ -2,6 +2,9 @@ include "../std/io.mal"
 
 include "lexer.mal"
 include "ir.mal"
+include "meta.mal"
+include "opt.mal"
+include "alloc.mal"
 include "codegen.mal"
 include "log.mal"
 
@@ -15,12 +18,13 @@ proc main(argc: s64, argv: &&s8) -> s64
   init_lexer()
   init_ir_maker()
   init_meta_maker()
+  init_opt()
   init_space_allocator()
   init_codegen()
 
   if argc < 3
     print_usage(argv[0])
-    error("No input file")
+    error("No input file\n")
     retval 1
   end
 

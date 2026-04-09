@@ -3,6 +3,8 @@ let var_types: &s64
 let var_begins: &s64
 let var_ends: &s64
 let var_uses: &s64
+let var_muts: &s64
+let var_is_deads: &s8
 let var_is_ref_targets: &s8
 let var_indices: &s64
 let var_offsets: &s64
@@ -23,6 +25,8 @@ proc set_min_vars_len(min_len: s64)
       var_begins = malloc(vars_len * sizeof s64) as &s64
       var_ends = malloc(vars_len * sizeof s64) as &s64
       var_uses = malloc(vars_len * sizeof s64) as &s64
+      var_muts = malloc(vars_len * sizeof s64) as &s64
+      var_is_deads = malloc(vars_len * sizeof s8)
       var_is_ref_targets = malloc(vars_len * sizeof s8)
       var_indices = malloc(vars_len * sizeof s64) as &s64
       var_offsets = malloc(vars_len * sizeof s64) as &s64
@@ -32,6 +36,8 @@ proc set_min_vars_len(min_len: s64)
       var_begins = realloc(var_begins as &s8, vars_len * sizeof s64) as &s64
       var_ends = realloc(var_ends as &s8, vars_len * sizeof s64) as &s64
       var_uses = realloc(var_uses as &s8, vars_len * sizeof s64) as &s64
+      var_muts = realloc(var_muts as &s8, vars_len * sizeof s64) as &s64
+      var_is_deads = realloc(var_is_deads, vars_len * sizeof s8)
       var_is_ref_targets = realloc(var_is_ref_targets, vars_len * sizeof s8)
       var_indices = realloc(var_indices as &s8, vars_len * sizeof s64) as &s64
       var_offsets = realloc(var_offsets as &s8, vars_len * sizeof s64) as &s64
@@ -45,6 +51,8 @@ proc set_min_vars_len(min_len: s64)
       var_begins[i] = -1
       var_ends[i] = -1
       var_uses[i] = 0
+      var_muts[i] = 0
+      var_is_deads[i] = 0 as s8
       var_is_ref_targets[i] = 0 as s8
 
       i = i + 1
@@ -178,10 +186,14 @@ proc make_meta_for_proc(index: s64)
       if dest_id >= 0
         if var_begins[dest_id] == -1
           var_begins[dest_id] = i
+        else
+          var_ends[dest_id] = i
         end
 
         if get_var_type(dest_id) == -1
           var_types[dest_id] = instr_get_dest_type(i)
+        else
+          var_muts[dest_id] = var_muts[dest_id] + 1
         end
       end
     end
@@ -228,6 +240,73 @@ proc make_meta_for_proc(index: s64)
   while i < pend
     if ir_types[i] == 0 as s8
       ir_arg1s[i] = var_types[ir_dest_ids[i]]
+    end
+
+    i = i + 1
+  end
+
+  i = pbegin
+
+  while i < pend
+    if ir_types[i] == 15 as s8
+      let label_id = ir_arg1s[i]
+      let jump_index = pbegin
+
+      while (jump_index < pend) &
+            ((ir_types[jump_index] != 13 as s8) |
+             (ir_arg1s[jump_index] != label_id))
+        jump_index = jump_index + 1
+      end
+
+      if jump_index > i
+        let j = i
+
+        while j < jump_index
+          if instr_has_dest(j)
+            let dest_id = ir_dest_ids[j]
+            if dest_id >= 0
+              if var_ends[dest_id] < jump_index
+                var_ends[dest_id] = jump_index
+              end
+            end
+          end
+
+          if instr_has_arg1(j)
+            if instr_is_arg1_var(j)
+              let arg1 = ir_arg1s[j]
+              if arg1 >= 0
+                if var_ends[arg1] < jump_index
+                  var_ends[arg1] = jump_index
+                end
+              end
+            end
+          end
+
+          if instr_has_arg2(j)
+            if instr_is_arg2_var(j)
+              let arg2 = ir_arg2s[j]
+              if arg2 >= 0
+                if var_ends[arg2] < jump_index
+                  var_ends[arg2] = jump_index
+                end
+              end
+            end
+          end
+
+          if instr_has_arg3(j)
+            if instr_is_arg3_var(j)
+              let arg3 = ir_arg3s[j]
+              if arg3 >= 0
+                if var_ends[arg3] < jump_index
+                  var_ends[arg3] = jump_index
+                end
+              end
+            end
+          end
+
+          j = j + 1
+        end
+      end
     end
 
     i = i + 1

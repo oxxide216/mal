@@ -1,5 +1,6 @@
 include "meta.mal"
 include "alloc.mal"
+include "debug.mal"
 
 let strs_count: s64
 
@@ -350,8 +351,6 @@ proc print_str_bytes(fd: s64, token: s64)
       end
       fprint(fd, str)
 
-      write(1, &char, 1)
-
       free(str)
       chars_emitted = chars_emitted + 1
     end
@@ -643,6 +642,12 @@ proc print_op(fd: s64, op_token: s64, dest: s64, lhs: s64, rhs: s64)
 end
 
 proc gen_asm_instr(fd: s64, index: s64)
+  if instr_has_dest(index) & (ir_dest_ids[index] >= 0)
+    if var_is_deads[ir_dest_ids[index]]
+      ret
+    end
+  end
+
   let type = ir_types[index]
 
   if type == 2 as s8
@@ -839,9 +844,13 @@ proc gen_asm_instr(fd: s64, index: s64)
     fprint(fd, ",")
     print_var_loc(fd, ir_arg1s[index], 0)
     fprintln(fd, "")
-    fprintln(fd, "  jmp .end")
+    if index + 1 < ir_proc_ends[current_proc_index]
+      fprintln(fd, "  jmp .end")
+    end
   elif type == 17 as s8
-    fprintln(fd, "  jmp .end")
+    if index + 1 < ir_proc_ends[current_proc_index]
+      fprintln(fd, "  jmp .end")
+    end
   elif type == 18 as s8
     let token = ir_arg0_tokens[index]
 
@@ -1126,6 +1135,7 @@ proc gen_asm(fd: s64)
       fprintln(fd, "")
     else
       make_meta_for_proc(i)
+      opt_proc(i)
       alloc_regs_for_proc(i)
 
       #dump_proc_ir(i)

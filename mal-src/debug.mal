@@ -1,0 +1,85 @@
+include "ir.mal"
+include "meta.mal"
+
+proc dump_proc_ir(index: s64)
+  let name = ir_proc_name_tokens[index]
+  let pbegin = ir_proc_begins[index]
+  let pend = ir_proc_ends[index]
+
+  if pbegin == -1
+    if index > 0
+      println("")
+    end
+    print("extern proc ")
+    write(1, token_codes[name] + token_begins[name],
+          token_ends[name] - token_begins[name])
+    println("()")
+  else
+    if index > 0
+      println("")
+    end
+    print("proc ")
+    write(1, token_codes[name] + token_begins[name],
+          token_ends[name] - token_begins[name])
+    println("()")
+
+    let i = pbegin
+
+    while i < pend
+      let itype = ir_types[i]
+      let idest_id = ir_dest_ids[i]
+      let iarg0_token = ir_arg0_tokens[i]
+      let iarg1 = ir_arg1s[i]
+      let iarg2 = ir_arg2s[i]
+      let iarg3 = ir_arg3s[i]
+
+      let is_dead = 0 as s8
+      if instr_has_dest(i) & (idest_id >= 0)
+        is_dead = var_is_deads[idest_id]
+      end
+
+      if is_dead == 0 as s8
+        print("  ")
+        if instr_has_dest(i)
+          let str = s64_to_str(idest_id)
+          print(str)
+          print(" = ")
+          free(str)
+        end
+        print_instr_type(itype)
+        if iarg0_token != -1
+          print(" ")
+          write(1, token_codes[iarg0_token] + token_begins[iarg0_token],
+                token_ends[iarg0_token] - token_begins[iarg0_token])
+        end
+        if instr_has_arg1(i)
+          print(" ")
+          if itype == 0 as s8
+            print_type(iarg1)
+          else
+            let str = s64_to_str(iarg1)
+            print(str)
+            free(str)
+          end
+        end
+        if instr_has_arg2(i)
+          print(" ")
+          let str = s64_to_str(iarg2)
+          print(str)
+          free(str)
+        end
+        if instr_has_arg3(i)
+          print(" ")
+          let str = s64_to_str(iarg3)
+          print(str)
+          free(str)
+        end
+        println("")
+      end
+
+      i = i + 1
+    end
+
+    println("end")
+  end
+end

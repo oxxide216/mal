@@ -1,6 +1,8 @@
 /build/
 /mal
 /malc
+/malc1
+/malc2
 /libs/
 /*.s
 /*.o

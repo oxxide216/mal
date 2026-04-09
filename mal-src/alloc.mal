@@ -71,24 +71,39 @@ proc var_get_no_collision_reg_index(vbegin: s64, vend: s64, max_vars: s64) -> s6
 end
 
 proc alloc_regs_for_proc(index: s64)
-  sorted_var_indices = malloc(vars_len * sizeof s64) as &s64
-
-  let params_len = ir_proc_params_lens[index]
-
+  let len = 0
   let i = 0
 
   while i < vars_len
-    sorted_var_indices[i] = i
+    if var_is_deads[i] == 0 as s8
+      len = len + 1
+    end
 
     i = i + 1
   end
 
+  sorted_var_indices = malloc(len * sizeof s64) as &s64
+
+  len = 0
+  i = 0
+
+  while i < vars_len
+    if var_is_deads[i] == 0 as s8
+      sorted_var_indices[len] = i
+      len = len + 1
+    end
+
+    i = i + 1
+  end
+
+  let params_len = ir_proc_params_lens[index]
+
   i = params_len
 
-  while i + 1 < vars_len
+  while i + 1 < len
     let j = params_len
 
-    while j + i + 1 < vars_len
+    while j + i + 1 < len
       let a = var_uses[sorted_var_indices[j]]
       let b = var_uses[sorted_var_indices[j + 1]]
 
@@ -109,7 +124,7 @@ proc alloc_regs_for_proc(index: s64)
 
   i = 0
 
-  while i < vars_len
+  while i < len
     let vbegin = var_begins[sorted_var_indices[i]]
     let vend = var_ends[sorted_var_indices[i]]
 

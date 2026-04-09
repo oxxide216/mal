@@ -1,0 +1,106 @@
+include "meta.mal"
+
+let dead_var_ids: &s64
+let dead_var_replacement_ids: &s64
+let dead_vars_len: s64
+let dead_vars_cap: s64
+
+proc init_opt()
+  dead_vars_len = 0
+  dead_vars_cap = 0
+end
+
+proc push_dead_var(id: s64, replacement_id: s64)
+  if dead_vars_cap <= dead_vars_len
+    if dead_vars_cap == 0
+      dead_vars_cap = 10
+      dead_var_ids = malloc(dead_vars_cap * sizeof s64) as &s64
+      dead_var_replacement_ids = malloc(dead_vars_cap * sizeof s64) as &s64
+    else
+      dead_vars_cap = dead_vars_cap * 2
+      dead_var_ids = realloc(dead_var_ids as &s8, dead_vars_cap * sizeof s64) as &s64
+      dead_var_replacement_ids = realloc(dead_var_replacement_ids as &s8, dead_vars_cap * sizeof s64) as &s64
+    end
+  end
+
+  dead_var_ids[dead_vars_len] = id
+  dead_var_replacement_ids[dead_vars_len] = replacement_id
+  dead_vars_len = dead_vars_len + 1
+end
+
+proc get_var_replacement(id: s64) -> s64
+  let i = dead_vars_len
+
+  while i > 0
+    if dead_var_ids[i - 1] == id
+      retval dead_var_replacement_ids[i - 1]
+    end
+
+    i = i - 1
+  end
+
+  retval -1
+end
+
+proc reset_opt()
+  dead_vars_len = 0
+end
+
+proc remove_redundant_loads_proc(index: s64)
+  reset_opt()
+
+  let pbegin = ir_proc_begins[index]
+  let pend = ir_proc_ends[index]
+
+  let i = pbegin
+
+  while i < pend
+    if instr_has_arg1(i) & instr_is_arg1_var(i)
+      let replacement = get_var_replacement(ir_arg1s[i])
+      if replacement >= 0
+        ir_arg1s[i] = replacement
+        if var_ends[replacement] < i
+          var_ends[replacement] = i
+        end
+      end
+    end
+
+    if instr_has_arg2(i) & instr_is_arg2_var(i)
+      let replacement = get_var_replacement(ir_arg2s[i])
+      if replacement >= 0
+        ir_arg2s[i] = replacement
+        if var_ends[replacement] < i
+          var_ends[replacement] = i
+        end
+      end
+    end
+
+    if instr_has_arg3(i) & instr_is_arg3_var(i)
+      let replacement = get_var_replacement(ir_arg3s[i])
+      if replacement >= 0
+        ir_arg3s[i] = replacement
+        if var_ends[replacement] < i
+          var_ends[replacement] = i
+        end
+      end
+    end
+
+    if ir_types[i] == 5 as s8
+      let dest_id = ir_dest_ids[i]
+      if dest_id >= 0
+        if var_uses[dest_id] == 0
+          var_is_deads[dest_id] = 1 as s8
+        elif var_muts[dest_id] == 0
+          var_is_deads[dest_id] = 1 as s8
+          push_dead_var(dest_id, ir_arg1s[i])
+        end
+      end
+    end
+
+    i = i + 1
+  end
+end
+
+proc opt_proc(index: s64)
+  remove_redundant_loads_proc(index)
+end
