@@ -1,3 +1,3 @@
-# Mini Aether Language
+# MAL
 
-Low-level programming language written in [Aether](https://github.com/oxxide216/aether) - my other programming language!
+Low-level programming language written in C (and currently being rewritten in itself).
