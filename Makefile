@@ -25,7 +25,7 @@ malc1: malc
 > ld -T scripts/link.ld -o malc1 malc1.o
 
 malc2: malc1
-> ./mal1 malc2.s mal-src/main.mal
+> ./malc1 malc2.s mal-src/main.mal
 > yasm -f elf64 malc2.s
 > ld -T scripts/link.ld -o malc2 malc2.o
 
