@@ -19,6 +19,16 @@ malc:
 > yasm -f elf64 malc.s
 > ld -T scripts/link.ld -o malc malc.o
 
+malc1: malc
+> ./malc malc1.s mal-src/main.mal
+> yasm -f elf64 malc1.s
+> ld -T scripts/link.ld -o malc1 malc1.o
+
+malc2: malc1
+> ./mal1 malc2.s mal-src/main.mal
+> yasm -f elf64 malc2.s
+> ld -T scripts/link.ld -o malc2 malc2.o
+
 src/grammar.h: libs/lexgen/lexgen grammar.lg
 > libs/lexgen/lexgen src/grammar.h grammar.lg
 
