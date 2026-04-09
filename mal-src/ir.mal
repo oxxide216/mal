@@ -828,7 +828,7 @@ end
 
 proc make_ir()
   while pos < tokens_len
-    expect_token(mask(64) | mask(66) | mask(69) | mask(75))
+    expect_token(mask(64) | mask(66) | mask(69))
     if token_types[pos] == 64 as s8
       pos = pos + 1
 
