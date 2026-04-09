@@ -28,18 +28,19 @@ proc push_dead_var(id: s64, replacement_id: s64)
   dead_vars_len = dead_vars_len + 1
 end
 
-proc get_var_replacement(id: s64) -> s64
+proc get_var_replacement(id: s64, replacement: &s64) -> s8
   let i = dead_vars_len
 
   while i > 0
     if dead_var_ids[i - 1] == id
-      retval dead_var_replacement_ids[i - 1]
+      replacement := dead_var_replacement_ids[i - 1]
+      retval 1 as s8
     end
 
     i = i - 1
   end
 
-  retval -1
+  retval 0 as s8
 end
 
 proc reset_opt()
@@ -56,31 +57,37 @@ proc remove_redundant_loads_proc(index: s64)
 
   while i < pend
     if instr_has_arg1(i) & instr_is_arg1_var(i)
-      let replacement = get_var_replacement(ir_arg1s[i])
-      if replacement >= 0
+      let replacement = 0
+      if get_var_replacement(ir_arg1s[i], &replacement)
         ir_arg1s[i] = replacement
-        if var_ends[replacement] < i
-          var_ends[replacement] = i
+        if replacement >= 0
+          if var_ends[replacement] < i
+            var_ends[replacement] = i
+          end
         end
       end
     end
 
     if instr_has_arg2(i) & instr_is_arg2_var(i)
-      let replacement = get_var_replacement(ir_arg2s[i])
-      if replacement >= 0
+      let replacement = 0
+      if get_var_replacement(ir_arg2s[i], &replacement)
         ir_arg2s[i] = replacement
-        if var_ends[replacement] < i
-          var_ends[replacement] = i
+        if replacement >= 0
+          if var_ends[replacement] < i
+            var_ends[replacement] = i
+          end
         end
       end
     end
 
     if instr_has_arg3(i) & instr_is_arg3_var(i)
-      let replacement = get_var_replacement(ir_arg3s[i])
-      if replacement >= 0
+      let replacement = 0
+      if get_var_replacement(ir_arg3s[i], &replacement)
         ir_arg3s[i] = replacement
-        if var_ends[replacement] < i
-          var_ends[replacement] = i
+        if replacement >= 0
+          if var_ends[replacement] < i
+            var_ends[replacement] = i
+          end
         end
       end
     end
