@@ -86,7 +86,7 @@ proc get_proc_index(name: s64) -> s64
     let temp_code = token_codes[ir_proc_name_tokens[i]]
 
     if temp_end - temp_begin == name_len
-      if str_n_eq(temp_code + temp_begin, name_code + name_begin, name_len)
+      if mem_eq(temp_code + temp_begin, name_code + name_begin, name_len)
         retval i
       end
     end

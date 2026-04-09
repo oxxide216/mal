@@ -52,3 +52,15 @@ proc memcopy(dest: &s8, src: &s8, size: s64)
     size = size - 1
   end
 end
+
+proc mem_eq(a: &s8, b: &s8, n: s64) -> s8
+  let i = 0
+  while i < n
+    if a[i] != b[i]
+      retval 0 as s8
+    end
+    i = i + 1
+  end
+
+  retval 1 as s8
+end

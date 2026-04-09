@@ -230,7 +230,11 @@ end
 
 proc expect_token(mask: s64)
   if pos >= tokens_len
-    ppoerror(token_paths[tokens_len - 1], "Unexpected EOF\n")
+    if tokens_len == 0
+      error("Unexpected EOF\n")
+    else
+      ppoerror(token_paths[tokens_len - 1], "Unexpected EOF\n")
+    end
     exit(1)
   end
 
@@ -288,7 +292,7 @@ proc get_named_var_id(name: s64) -> s64
     let temp_code = token_codes[named_var_name_tokens[i - 1]]
 
     if temp_end - temp_begin == name_len
-      if str_n_eq(temp_code + temp_begin, name_code + name_begin, name_len)
+      if mem_eq(temp_code + temp_begin, name_code + name_begin, name_len)
         retval named_var_ids[i - 1]
       end
     end
@@ -304,7 +308,7 @@ proc get_named_var_id(name: s64) -> s64
     let temp_code = token_codes[global_name_tokens[i - 1]]
 
     if temp_end - temp_begin == name_len
-      if str_n_eq(temp_code + temp_begin, name_code + name_begin, name_len)
+      if mem_eq(temp_code + temp_begin, name_code + name_begin, name_len)
         retval 0 - i
       end
     end
@@ -320,15 +324,15 @@ proc get_named_var_id(name: s64) -> s64
 end
 
 proc str_to_type_kind(sbegin: s64, send: s64, scode: &s8) -> s8
-  if str_n_eq(scode + sbegin, "unit", 4)
+  if mem_eq(scode + sbegin, "unit", 4)
     retval 0 as s8
-  elif str_n_eq(scode + sbegin, "s8", 2)
+  elif mem_eq(scode + sbegin, "s8", 2)
     retval 2 as s8
-  elif str_n_eq(scode + sbegin, "s16", 3)
+  elif mem_eq(scode + sbegin, "s16", 3)
     retval 3 as s8
-  elif str_n_eq(scode + sbegin, "s32", 3)
+  elif mem_eq(scode + sbegin, "s32", 3)
     retval 4 as s8
-  elif str_n_eq(scode + sbegin, "s64", 3)
+  elif mem_eq(scode + sbegin, "s64", 3)
     retval 5 as s8
   end
 

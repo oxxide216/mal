@@ -21,18 +21,6 @@ proc str_eq(a: &s8, b: &s8) -> s8
   retval (a[i] == '\0') & (b[i] == '\0')
 end
 
-proc str_n_eq(a: &s8, b: &s8, n: s64) -> s8
-  let i = 0
-  while i < n
-    if a[i] != b[i]
-      retval 0 as s8
-    end
-    i = i + 1
-  end
-
-  retval 1 as s8
-end
-
 proc s64_to_str(num: s64) -> &s8
   let _num = num
   let len = 1
